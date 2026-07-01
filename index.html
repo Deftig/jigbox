@@ -6608,17 +6608,25 @@
   
       execute() {
           if (this.category === 'channel') {
-              onChannelAccept(this.name, this.value);
+              if (typeof onChannelAccept === 'function') {
+                  onChannelAccept(this.name, this.value);
+              }
           }
           else if (this.category === 'property') {
               ctx.properties.set(this.name, this.value);
-              onPropertyChange(this.name, this.value);
+              if (typeof onPropertyChange === 'function') {
+                  onPropertyChange(this.name, this.value);
+              }
           }
           else if (this.category === 'trigger') {
-              onTrigger(this.name);
+              if (typeof onTrigger === 'function') {
+                  onTrigger(this.name);
+              }
           }
           else if (this.category === 'timer') {
-              onTimer(this.name);
+              if (typeof onTimer === 'function') {
+                  onTimer(this.name);
+              }
           }
           else if (this.category === 'timer-interval') {
               ctx.updateTimerInterval(this.name, this.value);
@@ -15496,7 +15504,7 @@
   <script>
   const ButtonSymbols = Object.freeze({
       project: '🗊',
-      persistence: '🖫',
+      persistence: '🗀',
       workspace: '🗉',
       settings: '⚙',
       library: '🕮',
