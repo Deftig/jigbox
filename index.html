@@ -3194,10 +3194,57 @@
       this.group = new Konva.Group();
       this.group.add(this.clickBox)
       this.group.add(buttonRect);
+      this.skipNextClick = false;
+  
+      const stopEvent = (event) => {
+        if (!event) return;
+        event.cancelBubble = true;
+      };
+  
+      const activateButton = (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0);
+        this.clickFunc();
+      };
   
       this.group.on('click', (event) => {
-        event.cancelBubble = true;
-        this.clickFunc();
+        if (this.skipNextClick) {
+          this.skipNextClick = false;
+          stopEvent(event);
+          this.clickBox.opacity(0);
+          return;
+        }
+        activateButton(event);
+      });
+  
+      this.group.on('tap', (event) => {
+        this.skipNextClick = true;
+        activateButton(event);
+      });
+  
+      this.group.on('pointerdown', (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0.75);
+      });
+  
+      this.group.on('pointerup', (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0);
+      });
+  
+      this.group.on('pointercancel', (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0);
+      });
+  
+      this.group.on('mousedown', (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0.75);
+      });
+  
+      this.group.on('mouseup', (event) => {
+        stopEvent(event);
+        this.clickBox.opacity(0);
       });
   
       this.group.on('mouseover', () => {
@@ -3209,15 +3256,6 @@
         this.clickBox.opacity(0);
         document.body.style.cursor = 'default';
       });
-  
-      this.group.on('mousedown', () => {
-        this.clickBox.opacity(0.75);
-      });
-  
-      this.group.on('mouseup', () => {
-        this.clickBox.opacity(0);
-      });
-      
     }
   
     setLocation(x, y){
@@ -3251,7 +3289,19 @@
         }
       });
   
-      this.dragElement.on('dragstart.KonvaGroupDragItem', () => { this.konvaWorkspace.startDragWith(this.konvaComponent); });
+      this.dragElement.on('dragstart.KonvaGroupDragItem', (event) => {
+        const isTouchPointer = event?.evt?.pointerType === 'touch'
+          || (event?.evt?.touches?.length ?? 0) > 0
+          || (event?.evt?.changedTouches?.length ?? 0) > 0;
+        if (
+          isTouchPointer !== true
+          && event?.evt?.shiftKey !== true
+          && this.konvaComponent.model?.selected !== true
+        ) {
+          this.konvaWorkspace.selectItemExclusive(this.konvaComponent);
+        }
+        this.konvaWorkspace.startDragWith(this.konvaComponent);
+      });
       this.dragElement.on('dragend.KonvaGroupDragItem', () => { this.konvaWorkspace.endDrag(); });
       this.dragElement.on('dragmove.KonvaGroupDragItem', (event) => { this.konvaWorkspace.itemDragMoving(event, this.konvaComponent); });
     }
@@ -7978,6 +8028,7 @@
       );
       this.promoteDraggedElementsToOverlay();
       this.isGroupDragging = this.dragFollowers.size > 0;
+      this.lastDragLeadPosition = draggableElement.getCanvasPosition?.() ?? null;
     }
   
     collectDraggedItems(draggableElement) {
@@ -8284,17 +8335,22 @@
       const droppedItems = this.getTopLevelDraggedItems();
       //Consider shortcutting in case parent has not changed (for drag group)
       if (this.parentNominee) {
+        const nextParent = this.parentNominee;
         this.parentNominee.unhighlightContainer();
         droppedItems.forEach((item) => {
           item.model.getParent()?.removeChild(item.model);
         });
         droppedItems.forEach((item) => {
           if (item instanceof KonvaContainerController) {
-            this.parentNominee.addContainer(item);
+            nextParent.addContainer(item);
           } else {
-            this.parentNominee.addChildItem(item);
+            nextParent.addChildItem(item);
           }
         });
+        nextParent.ensureFitsChildren?.();
+        this.enforceChildLayoutBounds(nextParent, true);
+        this.ensureAncestorsFit(nextParent);
+        this.syncContainerLayerOrder();
       } else {
         if (!this.dragLead) {
           this.logger.log(
@@ -8314,6 +8370,7 @@
       this.dragTopLevelItems = [];
       this.parentNominee = null;
       this.candidateParents = null;
+      this.lastDragLeadPosition = null;
     }
   
     getTopLevelDraggedItems() {
@@ -8322,21 +8379,46 @@
   
     itemDragMoving(event, konvaComponent) {
       this.invalidateExpansionMemo(konvaComponent);
+      const dragDelta = this.getDragMoveDelta(event, konvaComponent);
       this.dragFollowers.forEach((f) => {
         const konvaElement = f.getKonvaElement();
-  
-        konvaElement.x(
-          konvaElement.x() + event.evt.movementX / this.currentScale,
-        );
-        konvaElement.y(
-          konvaElement.y() + event.evt.movementY / this.currentScale,
-        );
+        konvaElement.x(konvaElement.x() + dragDelta.x);
+        konvaElement.y(konvaElement.y() + dragDelta.y);
         if (f instanceof KonvaComponent) {
           f.updateConnectionPoints();
         }
       });
       this.updateConnectionPoints();
       this.nominateParentCandidate();
+    }
+  
+    getDragMoveDelta(event, konvaComponent) {
+      const movementX = Number(event?.evt?.movementX);
+      const movementY = Number(event?.evt?.movementY);
+      if (Number.isFinite(movementX) && Number.isFinite(movementY)) {
+        const currentPosition = konvaComponent?.getCanvasPosition?.();
+        if (currentPosition) {
+          this.lastDragLeadPosition = currentPosition;
+        }
+        return {
+          x: movementX / this.currentScale,
+          y: movementY / this.currentScale,
+        };
+      }
+  
+      const currentPosition = konvaComponent?.getCanvasPosition?.();
+      const previousPosition = this.lastDragLeadPosition;
+      if (currentPosition) {
+        this.lastDragLeadPosition = currentPosition;
+      }
+      if (!currentPosition || !previousPosition) {
+        return { x: 0, y: 0 };
+      }
+  
+      return {
+        x: currentPosition.x - previousPosition.x,
+        y: currentPosition.y - previousPosition.y,
+      };
     }
   
     clampItemWithinParentBounds(konvaComponent) {
