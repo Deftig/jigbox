@@ -3241,11 +3241,11 @@
     }
   
     activate() {
-      this.dragElement.on('mousedown.KonvaGroupDragItem', (e) => {
+      this.dragElement.on('pointerdown.KonvaGroupDragItem', (e) => {
         this.konvaWorkspace.selectItem(this.konvaComponent, e.evt.shiftKey);
       });
   
-      this.dragElement.on('mouseup.KonvaGroupDragItem', (e) => {
+      this.dragElement.on('pointerup.KonvaGroupDragItem', (e) => {
         if (this.konvaWorkspace.getIsGroupDragging() === false && e.evt.shiftKey === false) {
           this.konvaWorkspace.selectItemExclusive(this.konvaComponent);
         }
@@ -3257,8 +3257,8 @@
     }
   
     deactivate() {
-      this.dragElement.off('mousedown.KonvaGroupDragItem');
-      this.dragElement.off('mouseup.KonvaGroupDragItem');
+      this.dragElement.off('pointerdown.KonvaGroupDragItem');
+      this.dragElement.off('pointerup.KonvaGroupDragItem');
       this.dragElement.off('dragstart.KonvaGroupDragItem');
       this.dragElement.off('dragend.KonvaGroupDragItem');
       this.dragElement.off('dragmove.KonvaGroupDragItem');
@@ -6710,8 +6710,7 @@
   
       this.draggingConnector;
   
-      let width = window.innerWidth;
-      let height = window.innerHeight;
+      const { width, height } = this.getViewportDimensions();
   
       this.stage = new Konva.Stage({
         container: divName,
@@ -6741,9 +6740,11 @@
       this.setUpZoom(this.stage);
       this.setUpCanvasInteraction();
       this.setupGrid(this.backgroundLayer);
-      window.addEventListener("resize", () => {
+      this.handleViewportResize = () => {
         this.resizeToViewport();
-      });
+      };
+      window.addEventListener("resize", this.handleViewportResize);
+      window.visualViewport?.addEventListener?.("resize", this.handleViewportResize);
   
       this.stage.add(this.backgroundLayer);
   
@@ -6756,9 +6757,48 @@
       this.applyProjectPalette(Project.createDefaultSettings(), { draw: false });
     }
   
+    getViewportDimensions() {
+      const visualViewportWidth = Number(window.visualViewport?.width);
+      const visualViewportHeight = Number(window.visualViewport?.height);
+      return {
+        width: Number.isFinite(visualViewportWidth) && visualViewportWidth > 0
+          ? visualViewportWidth
+          : window.innerWidth,
+        height: Number.isFinite(visualViewportHeight) && visualViewportHeight > 0
+          ? visualViewportHeight
+          : window.innerHeight,
+      };
+    }
+  
     resizeToViewport() {
-      this.stage.width(window.innerWidth);
-      this.stage.height(window.innerHeight);
+      const previousWidth = Number(this.stage.width?.());
+      const previousHeight = Number(this.stage.height?.());
+      const { width, height } = this.getViewportDimensions();
+      const scale = this.getStageScaleValue();
+  
+      let viewportCenterWorldPoint = null;
+      if (
+        Number.isFinite(previousWidth) &&
+        previousWidth > 0 &&
+        Number.isFinite(previousHeight) &&
+        previousHeight > 0 &&
+        Number.isFinite(scale) &&
+        scale > 0
+      ) {
+        viewportCenterWorldPoint = {
+          x: ((previousWidth / 2) - this.stage.x()) / scale,
+          y: ((previousHeight / 2) - this.stage.y()) / scale,
+        };
+      }
+  
+      this.stage.width(width);
+      this.stage.height(height);
+      if (viewportCenterWorldPoint) {
+        this.setStagePosition({
+          x: (width / 2) - (viewportCenterWorldPoint.x * scale),
+          y: (height / 2) - (viewportCenterWorldPoint.y * scale),
+        }, false);
+      }
       this.stage.batchDraw();
     }
   
@@ -15374,7 +15414,7 @@
   <script>
   const ButtonSymbols = Object.freeze({
       project: '🗊',
-      persistence: '🗀',
+      persistence: '🖫',
       workspace: '🗉',
       settings: '⚙',
       library: '🕮',
