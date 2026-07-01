@@ -6717,6 +6717,11 @@
   <!-- inlined from ./lib/Konva/KonvaWorkspace.js -->
   <script>
   class KonvaWorkspace {
+    static defaultGridStroke = "#CED8F7";
+    static darkGridStroke = "rgba(148, 163, 184, 0.18)";
+    static defaultBackgroundFill = "#f8fafc";
+    static darkBackgroundFill = "#0f172a";
+  
     dragFollowers = new Set(); // All moved elements except the drag lead
     konvaComponents = new Map();
     konvaConnections = new Map();
@@ -6736,6 +6741,8 @@
     pinchZoomState = null;
     isPinchZooming = false;
     nextListenerId = 0;
+    gridLines = [];
+    backgroundRect = null;
   
     dragbound = 5000;
     keyboardMoveStep = 10;
@@ -7261,25 +7268,82 @@
       const stepSize = 40;
       const length = 5000;
       const steps = (length + this.dragbound) / stepSize;
+      const backgroundFill = this.getWorkspaceBackgroundFill(Project.createDefaultSettings());
+      const gridStroke = this.getGridStrokeColor(Project.createDefaultSettings());
+  
+      this.backgroundRect = new Konva.Rect({
+        x: -this.dragbound,
+        y: -this.dragbound,
+        width: length + this.dragbound,
+        height: length + this.dragbound,
+        fill: backgroundFill,
+        listening: true,
+      });
+      layer.add(this.backgroundRect);
   
       for (let i = 0; i <= steps; i++) {
         let step = i * stepSize - this.dragbound;
-        layer.add(
-          // draw vertical lines
-          new Konva.Line({
-            points: [step, -this.dragbound, step, length],
-            stroke: "#CED8F7",
-            strokeWidth: 1,
-          }),
-        );
-        //draw Horizontal lines
-        layer.add(
-          new Konva.Line({
-            points: [-this.dragbound, step, length, step],
-            stroke: "#CED8F7",
-            strokeWidth: 1,
-          }),
-        );
+        const verticalLine = new Konva.Line({
+          points: [step, -this.dragbound, step, length],
+          stroke: gridStroke,
+          strokeWidth: 1,
+        });
+        const horizontalLine = new Konva.Line({
+          points: [-this.dragbound, step, length, step],
+          stroke: gridStroke,
+          strokeWidth: 1,
+        });
+        this.gridLines.push(verticalLine, horizontalLine);
+        layer.add(verticalLine);
+        layer.add(horizontalLine);
+      }
+    }
+  
+    getWorkspaceBackgroundFill(settings = null) {
+      const normalizedSettings = Project.normalizeSettings(
+        settings ?? Project.createDefaultSettings(),
+      );
+      return normalizedSettings.themeMode === "dark"
+        ? KonvaWorkspace.darkBackgroundFill
+        : KonvaWorkspace.defaultBackgroundFill;
+    }
+  
+    getGridStrokeColor(settings = null) {
+      const normalizedSettings = Project.normalizeSettings(
+        settings ?? Project.createDefaultSettings(),
+      );
+      return normalizedSettings.themeMode === "dark"
+        ? KonvaWorkspace.darkGridStroke
+        : KonvaWorkspace.defaultGridStroke;
+    }
+  
+    setGridStrokeColor(strokeColor) {
+      this.gridLines.forEach((line) => {
+        if (typeof line?.stroke === "function") {
+          line.stroke(strokeColor);
+          return;
+        }
+        if (typeof line?.setAttr === "function") {
+          line.setAttr("stroke", strokeColor);
+          return;
+        }
+        if (line?.attrs) {
+          line.attrs.stroke = strokeColor;
+        }
+      });
+    }
+  
+    setWorkspaceBackgroundFill(fillColor) {
+      if (typeof this.backgroundRect?.fill === "function") {
+        this.backgroundRect.fill(fillColor);
+        return;
+      }
+      if (typeof this.backgroundRect?.setAttr === "function") {
+        this.backgroundRect.setAttr("fill", fillColor);
+        return;
+      }
+      if (this.backgroundRect?.attrs) {
+        this.backgroundRect.attrs.fill = fillColor;
       }
     }
   
@@ -7915,6 +7979,8 @@
         settings ?? Project.createDefaultSettings(),
       );
   
+      this.setWorkspaceBackgroundFill(this.getWorkspaceBackgroundFill(normalizedSettings));
+      this.setGridStrokeColor(this.getGridStrokeColor(normalizedSettings));
       KonvaContainerStyles.instance.applyProjectSettings(normalizedSettings);
       KonvaPropertyLineStyles.instance.applyProjectSettings(normalizedSettings);
       KonvaChannelLineStyles.instance.applyProjectSettings(normalizedSettings);
@@ -19248,6 +19314,7 @@
                           items: [],
                           connections: [],
                           controlPanels: [],
+                          windowLayout: WorkspacePersistence.createEmptyWindowLayoutSnapshot(),
                       },
                   },
               ],
@@ -19264,6 +19331,7 @@
                   infer: [
                       'Map major actors, modules, devices, services, or steps to components.',
                       'Map groups, subsystems, rooms, scenes, teams, or boundaries to containers.',
+                      'Map labels, operator notes, instructions, legends, and explanatory annotations to text items.',
                       'Map named state, settings, counters, measurements, and outputs to properties.',
                       'Map messages, events, commands, and data flow between components to channels.',
                       'Map repeated behavior, polling, schedules, heartbeats, and periodic updates to timers.',
@@ -19321,7 +19389,7 @@
                   interfaceScale: Workspace.interfaceScaleOptions,
                   codeMode: [Component.codeModeLegacy, Component.codeModeStructured],
                   connectableType: ['channel', 'property'],
-                  libraryRootType: ['component', 'container'],
+                  libraryRootType: ['component', 'container', 'text'],
                   controlPanelEntryType: [
                       ControlPanelModel.entryTypeProperty,
                       ControlPanelModel.entryTypeTimer,
@@ -19331,6 +19399,8 @@
                       ControlPanelModel.propertyRepresentationText,
                       ControlPanelModel.propertyRepresentationDropdown,
                       ControlPanelModel.propertyRepresentationBooleanToggle,
+                      ControlPanelModel.propertyRepresentationNumber,
+                      ControlPanelModel.propertyRepresentationSlider,
                       ControlPanelModel.propertyRepresentationProgress,
                   ],
               },
@@ -19341,6 +19411,11 @@
                       settings: {
                           themeMode: 'default|dark',
                           interfaceScale: '1|0.85|0.7',
+                          nodeBodyColor: '#rrggbb',
+                          nodeHeaderColor: '#rrggbb',
+                          nodeSelectionColor: '#rrggbb',
+                          channelConnectionColor: '#rrggbb',
+                          propertyConnectionColor: '#rrggbb',
                       },
                       activeWorkspaceId: 'int>0',
                       workspaces: ['WorkspaceRecord'],
@@ -19371,6 +19446,7 @@
                       items: ['Container|Component|TextItem'],
                       connections: ['Connection'],
                       controlPanels: ['ControlPanel'],
+                      windowLayout: 'WindowLayout',
                   },
                   container: {
                       id: 'int>0',
@@ -19380,7 +19456,7 @@
                       expanded: 'boolean',
                       manualPromotedProperties: [{ componentId: 'int', connectableId: 'int' }],
                       position: { x: 'number', y: 'number' },
-                      size: '{width:number,height:number}|null',
+                      size: '{expanded:{width:number,height:number},collapsed:{width:number,height:number}}|null',
                   },
                   component: {
                       id: 'int>0',
@@ -19434,6 +19510,7 @@
                   controlPanel: {
                       id: 'int>=0',
                       name: 'string',
+                      dockIconText: 'string(single visible glyph or empty string)',
                       entries: ['PropertyEntry|TimerEntry|TriggerEntry'],
                   },
                   propertyEntry: {
@@ -19459,6 +19536,32 @@
                       entryId: 'int>0',
                       label: 'string',
                   },
+                  windowLayout: {
+                      version: 1,
+                      panels: ['WindowLayoutPanel'],
+                      docks: ['WindowLayoutDock'],
+                  },
+                  windowLayoutPanel: {
+                      id: 'string',
+                      visible: 'boolean',
+                      dockSide: 'left|right|top|bottom|null',
+                      floatingBounds: {
+                          left: 'number',
+                          top: 'number',
+                          width: 'number',
+                          height: 'number|null',
+                      },
+                  },
+                  windowLayoutDock: {
+                      side: 'left|right|top|bottom',
+                      collapsed: 'boolean',
+                      activePanelId: 'string|null',
+                      panelIds: ['string'],
+                      size: {
+                          width: 'number|null',
+                          height: 'number|null',
+                      },
+                  },
               },
               rules: [
                   'activeWorkspaceId must match one workspace id',
@@ -19473,6 +19576,9 @@
                   'use the user description to decide component count, names, structure, connections, properties, channels, timers, triggers, control panels, and code',
                   'minimalProject is only a schema-safe fallback skeleton, not the desired output when the user described a real system',
                   'use codeMode="structured" and include codeSections unless legacy code is explicitly needed',
+                  'project settings should include the current theme, interface scale, and canvas color fields unless the user explicitly wants defaults',
+                  'workspaceSnapshot.windowLayout should be present; if layout is unknown use { "version": 1, "panels": [], "docks": [] }',
+                  'container size uses expanded and collapsed bounds; component and text sizes use simple width/height objects',
                   'if size is unknown use null',
                   'if no componentLibrary, connections, or controlPanels exist use empty arrays',
                   'output strict JSON only',
