@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
   <!-- inlined from ./lib/Konva/konva.min.js -->
   <script>
@@ -6674,6 +6674,9 @@
     stagePanPointerId = null;
     stagePanStartPointer = null;
     stagePanStartPosition = null;
+    activeTouchPoints = new Map();
+    pinchZoomState = null;
+    isPinchZooming = false;
     nextListenerId = 0;
   
     dragbound = 5000;
@@ -6772,7 +6775,7 @@
       const x = Number(viewport?.x);
       const y = Number(viewport?.y);
       const normalizedScale = Number.isFinite(scale)
-        ? Math.max(this.minScale, Math.min(scale, this.maxScale))
+        ? this.clampViewportScale(scale)
         : 1;
   
       this.currentScale = normalizedScale;
@@ -6982,6 +6985,105 @@
       return this.dragbound * this.currentScale;
     }
   
+    clampViewportScale(scale) {
+      return Math.max(this.minScale, Math.min(scale, this.maxScale));
+    }
+  
+    getStageScaleValue() {
+      const stageScaleX = typeof this.stage.scaleX === "function"
+        ? Number(this.stage.scaleX())
+        : NaN;
+      if (Number.isFinite(stageScaleX) && stageScaleX > 0) {
+        return stageScaleX;
+      }
+  
+      const stageScale = typeof this.stage.scale === "function"
+        ? this.stage.scale()
+        : null;
+      const scaleX = Number(stageScale?.x);
+      if (Number.isFinite(scaleX) && scaleX > 0) {
+        return scaleX;
+      }
+  
+      return this.currentScale;
+    }
+  
+    getEventClientPoint(domEvent) {
+      if (domEvent?.touches?.length) {
+        return {
+          x: domEvent.touches[0].clientX,
+          y: domEvent.touches[0].clientY,
+        };
+      }
+      if (domEvent?.changedTouches?.length) {
+        return {
+          x: domEvent.changedTouches[0].clientX,
+          y: domEvent.changedTouches[0].clientY,
+        };
+      }
+  
+      const x = Number(domEvent?.clientX);
+      const y = Number(domEvent?.clientY);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return { x, y };
+    }
+  
+    getEventPointerId(domEvent) {
+      if (domEvent?.pointerId != null) return domEvent.pointerId;
+      if (domEvent?.changedTouches?.length) return domEvent.changedTouches[0].identifier;
+      if (domEvent?.touches?.length) return domEvent.touches[0].identifier;
+      return null;
+    }
+  
+    getDistanceBetweenPoints(pointA, pointB) {
+      if (!pointA || !pointB) return 0;
+      return Math.hypot(pointB.x - pointA.x, pointB.y - pointA.y);
+    }
+  
+    getMidpointBetweenPoints(pointA, pointB) {
+      if (!pointA || !pointB) return null;
+      return {
+        x: (pointA.x + pointB.x) / 2,
+        y: (pointA.y + pointB.y) / 2,
+      };
+    }
+  
+    getTrackedTouchPoints() {
+      return Array.from(this.activeTouchPoints.values()).slice(0, 2);
+    }
+  
+    cancelMarqueeSelection() {
+      if (!this.selectionAnchor || !this.marqueeSelection?.visible?.()) return;
+      this.selectionAnchor = null;
+      this.selectionShiftKey = false;
+      this.selectionDragged = false;
+      this.marqueeSelection.visible(false);
+      this.primaryLayer.batchDraw();
+    }
+  
+    applyViewportScaleAtClientPoint(nextScale, clientPoint, anchorWorldPoint = null) {
+      if (!clientPoint) return this.currentScale;
+  
+      const previousScale = this.getStageScaleValue();
+      const normalizedScale = this.clampViewportScale(nextScale);
+      const stagePosition = {
+        x: this.stage.x(),
+        y: this.stage.y(),
+      };
+      const worldPoint = anchorWorldPoint ?? {
+        x: (clientPoint.x - stagePosition.x) / previousScale,
+        y: (clientPoint.y - stagePosition.y) / previousScale,
+      };
+  
+      this.currentScale = normalizedScale;
+      this.stage.scale({ x: normalizedScale, y: normalizedScale });
+      this.setStagePosition({
+        x: clientPoint.x - worldPoint.x * normalizedScale,
+        y: clientPoint.y - worldPoint.y * normalizedScale,
+      });
+      return normalizedScale;
+    }
+  
     clampViewportPosition(position) {
       const limit = this.getViewportPanLimit();
       const x = Number(position?.x);
@@ -7090,15 +7192,10 @@
         // stop default scrolling
         e.evt.preventDefault();
   
-        let oldScale = this.stage.scaleX();
+        let oldScale = this.getStageScaleValue();
         let pointer = this.stage.getPointerPosition();
+        if (!pointer) return;
   
-        let mousePointTo = {
-          x: (pointer.x - this.stage.x()) / oldScale,
-          y: (pointer.y - this.stage.y()) / oldScale,
-        };
-  
-        // how to scale? Zoom in? Or zoom out?
         let direction = e.evt.deltaY > 0 ? -1 : 1;
   
         // when we zoom on trackpad, e.evt.ctrlKey is true
@@ -7107,38 +7204,53 @@
           direction = -direction;
         }
   
-        this.currentScale = Math.max(
-          Math.min(
-            direction > 0 ? oldScale * scaleBy : oldScale / scaleBy,
-            this.maxScale,
-          ),
-          this.minScale,
-        );
-  
-        if (
-          this.currentScale > this.maxScale ||
-          this.currentScale < this.minScale
-        )
-          return;
-  
-        this.stage.scale({ x: this.currentScale, y: this.currentScale });
-  
-        let newPos = {
-          x: pointer.x - mousePointTo.x * this.currentScale,
-          y: pointer.y - mousePointTo.y * this.currentScale,
-        };
-        this.setStagePosition(newPos);
+        const nextScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+        this.applyViewportScaleAtClientPoint(nextScale, pointer);
       });
     }
   
     setUpCanvasInteraction() {
       const container = this.stage.container();
+      container.style.touchAction = "none";
+      container.style.overscrollBehavior = "none";
       container.addEventListener("contextmenu", (event) => {
         event.preventDefault();
       });
       container.addEventListener("pointerdown", () => {
         this.takeCanvasInteractionFocus();
       });
+      container.addEventListener("pointerdown", (event) => {
+        if (event.pointerType !== "touch") return;
+        this.activeTouchPoints.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (this.activeTouchPoints.size >= 2) {
+          this.beginPinchZoomGesture();
+          event.preventDefault();
+        }
+      });
+      container.addEventListener("pointermove", (event) => {
+        if (event.pointerType !== "touch") return;
+        if (!this.activeTouchPoints.has(event.pointerId)) return;
+        this.activeTouchPoints.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (this.isPinchZooming === true) {
+          this.updatePinchZoomGesture();
+          event.preventDefault();
+        }
+      });
+      const releaseTouchPointer = (event) => {
+        if (event.pointerType !== "touch") return;
+        this.activeTouchPoints.delete(event.pointerId);
+        if (this.activeTouchPoints.size < 2) {
+          this.endPinchZoomGesture();
+        }
+      };
+      container.addEventListener("pointerup", releaseTouchPointer);
+      container.addEventListener("pointercancel", releaseTouchPointer);
   
       this.marqueeSelection = new Konva.Rect({
         visible: false,
@@ -7171,6 +7283,79 @@
         this.finishStagePan(event);
         this.finishMarqueeSelection(event);
       });
+  
+      this.stage.on("touchstart.selection", (event) => {
+        if (this.draggingConnector || this.isPinchZooming === true) return;
+        if (!this.isCanvasHit(event.target)) return;
+        if ((event.evt.touches?.length ?? 0) !== 1) return;
+        this.startStagePan(event);
+        event.evt.preventDefault?.();
+      });
+  
+      this.stage.on("touchmove.selection", (event) => {
+        if (this.isPinchZooming === true) return;
+        this.updateStagePan(event);
+        event.evt.preventDefault?.();
+      });
+  
+      this.stage.on("touchend.selection", (event) => {
+        this.finishStagePan(event);
+      });
+  
+      this.stage.on("touchcancel.selection", (event) => {
+        this.finishStagePan(event);
+      });
+    }
+  
+    beginPinchZoomGesture() {
+      const [firstPoint, secondPoint] = this.getTrackedTouchPoints();
+      const startCenter = this.getMidpointBetweenPoints(firstPoint, secondPoint);
+      const startDistance = this.getDistanceBetweenPoints(firstPoint, secondPoint);
+      if (!startCenter || startDistance <= 0) return false;
+  
+      const startScale = this.getStageScaleValue();
+      const startPosition = {
+        x: this.stage.x(),
+        y: this.stage.y(),
+      };
+  
+      this.finishStagePan();
+      this.cancelMarqueeSelection();
+      this.pinchZoomState = {
+        startCenter,
+        startDistance,
+        startScale,
+        anchorWorldPoint: {
+          x: (startCenter.x - startPosition.x) / startScale,
+          y: (startCenter.y - startPosition.y) / startScale,
+        },
+      };
+      this.isPinchZooming = true;
+      return true;
+    }
+  
+    updatePinchZoomGesture() {
+      if (this.isPinchZooming !== true || !this.pinchZoomState) return false;
+  
+      const [firstPoint, secondPoint] = this.getTrackedTouchPoints();
+      const nextCenter = this.getMidpointBetweenPoints(firstPoint, secondPoint);
+      const nextDistance = this.getDistanceBetweenPoints(firstPoint, secondPoint);
+      if (!nextCenter || nextDistance <= 0) return false;
+  
+      const nextScale = this.pinchZoomState.startScale * (nextDistance / this.pinchZoomState.startDistance);
+      this.applyViewportScaleAtClientPoint(
+        nextScale,
+        nextCenter,
+        this.pinchZoomState.anchorWorldPoint,
+      );
+      return true;
+    }
+  
+    endPinchZoomGesture() {
+      if (this.isPinchZooming !== true && !this.pinchZoomState) return false;
+      this.isPinchZooming = false;
+      this.pinchZoomState = null;
+      return true;
     }
   
     isCanvasHit(target) {
@@ -7181,11 +7366,13 @@
     }
   
     startStagePan(event) {
+      const clientPoint = this.getEventClientPoint(event?.evt);
+      if (!clientPoint) return;
       this.isStagePanning = true;
-      this.stagePanPointerId = event.evt.pointerId ?? null;
+      this.stagePanPointerId = this.getEventPointerId(event?.evt);
       this.stagePanStartPointer = {
-        x: event.evt.clientX,
-        y: event.evt.clientY,
+        x: clientPoint.x,
+        y: clientPoint.y,
       };
       this.stagePanStartPosition = {
         x: this.stage.x(),
@@ -7196,16 +7383,18 @@
   
     updateStagePan(event) {
       if (!this.isStagePanning) return;
+      const pointer = this.getEventClientPoint(event?.evt);
+      if (!pointer) return;
       if (
         this.stagePanPointerId != null &&
-        event.evt.pointerId != null &&
-        event.evt.pointerId !== this.stagePanPointerId
+        this.getEventPointerId(event?.evt) != null &&
+        this.getEventPointerId(event?.evt) !== this.stagePanPointerId
       ) {
         return;
       }
   
-      const deltaX = event.evt.clientX - this.stagePanStartPointer.x;
-      const deltaY = event.evt.clientY - this.stagePanStartPointer.y;
+      const deltaX = pointer.x - this.stagePanStartPointer.x;
+      const deltaY = pointer.y - this.stagePanStartPointer.y;
       this.setStagePosition({
         x: this.stagePanStartPosition.x + deltaX,
         y: this.stagePanStartPosition.y + deltaY,
@@ -7216,8 +7405,8 @@
       if (!this.isStagePanning) return;
       if (
         this.stagePanPointerId != null &&
-        event?.evt?.pointerId != null &&
-        event.evt.pointerId !== this.stagePanPointerId
+        this.getEventPointerId(event?.evt) != null &&
+        this.getEventPointerId(event?.evt) !== this.stagePanPointerId
       ) {
         return;
       }
@@ -15566,6 +15755,14 @@
           return Math.min(Math.max(value, min), max);
       }
   
+      static isPrimaryPointerStart(event) {
+          if (!event) return false;
+          if (event.pointerType === 'mouse' || event.type === 'mousedown' || event.type === 'pointerdown') {
+              return Number(event.button ?? 0) === 0;
+          }
+          return event.isPrimary !== false;
+      }
+  
       static getViewportMetrics() {
           const uiScale = Panel.getUiScale();
           return {
@@ -15761,13 +15958,14 @@
           dock.handleResizeMouseMove = (event) => {
               Panel.continueDockResize(dock, event);
           };
-          dock.handleResizeMouseUp = () => {
-              Panel.endDockResize(dock);
+          dock.handleResizeMouseUp = (event) => {
+              Panel.endDockResize(dock, event);
           };
   
-          resizeHandle.addEventListener('mousedown', dock.handleResizeMouseDown);
-          document.addEventListener('mousemove', dock.handleResizeMouseMove);
-          document.addEventListener('mouseup', dock.handleResizeMouseUp);
+          resizeHandle.addEventListener('pointerdown', dock.handleResizeMouseDown);
+          document.addEventListener('pointermove', dock.handleResizeMouseMove);
+          document.addEventListener('pointerup', dock.handleResizeMouseUp);
+          document.addEventListener('pointercancel', dock.handleResizeMouseUp);
   
           element.appendChild(resizeHandle);
           element.appendChild(tabStrip);
@@ -15780,12 +15978,13 @@
   
       static destroyDock(dock) {
           if (!dock) return;
-          dock.resizeHandle?.removeEventListener('mousedown', dock.handleResizeMouseDown);
+          dock.resizeHandle?.removeEventListener('pointerdown', dock.handleResizeMouseDown);
           if (dock.handleResizeMouseMove) {
-              document.removeEventListener('mousemove', dock.handleResizeMouseMove);
+              document.removeEventListener('pointermove', dock.handleResizeMouseMove);
           }
           if (dock.handleResizeMouseUp) {
-              document.removeEventListener('mouseup', dock.handleResizeMouseUp);
+              document.removeEventListener('pointerup', dock.handleResizeMouseUp);
+              document.removeEventListener('pointercancel', dock.handleResizeMouseUp);
           }
           if (dock.resizeState) {
               Panel.endDockResize(dock);
@@ -15815,21 +16014,31 @@
   
       static beginDockResize(dock, event) {
           if (!dock?.activePanel || dock.collapsed) return;
+          if (!Panel.isPrimaryPointerStart(event)) return;
           const scale = Panel.getUiScale();
           dock.resizeState = {
               startClientX: event.clientX / scale,
               startClientY: event.clientY / scale,
               startWidth: dock.size.width,
               startHeight: dock.size.height,
+              pointerId: event.pointerId ?? null,
           };
           document.body.style.cursor = Panel.isSideDock(dock.side) ? 'ew-resize' : 'ns-resize';
           document.body.style.userSelect = 'none';
+          document.body.style.touchAction = 'none';
           event.preventDefault();
           event.stopPropagation();
       }
   
       static continueDockResize(dock, event) {
           if (!dock?.resizeState) return;
+          if (
+              dock.resizeState.pointerId != null
+              && event.pointerId != null
+              && event.pointerId !== dock.resizeState.pointerId
+          ) {
+              return;
+          }
           const scale = Panel.getUiScale();
           const pointerX = event.clientX / scale;
           const pointerY = event.clientY / scale;
@@ -15852,11 +16061,20 @@
           Panel.updateAllDockLayouts();
       }
   
-      static endDockResize(dock) {
+      static endDockResize(dock, event = null) {
           if (!dock?.resizeState) return;
+          if (
+              event
+              && dock.resizeState.pointerId != null
+              && event.pointerId != null
+              && event.pointerId !== dock.resizeState.pointerId
+          ) {
+              return;
+          }
           dock.resizeState = null;
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
+          document.body.style.touchAction = '';
       }
   
       static updateDockClassName(dock) {
@@ -16111,7 +16329,7 @@
           this.handleMouseDown = () => {
               this.bringToFront();
           };
-          this.element.addEventListener('mousedown', this.handleMouseDown);
+          this.element.addEventListener('pointerdown', this.handleMouseDown);
           if (options.resizable) {
               const resizeHandle = this.panelHelper.createElement('div', 'dp-panel-resize-handle');
               resizeHandle.setAttribute('aria-label', 'Resize window');
@@ -16187,6 +16405,7 @@
   
           this.handleDragMouseDown = (event) => {
               if (this.headerActionsElement?.contains(event.target)) return;
+              if (!Panel.isPrimaryPointerStart(event)) return;
               this.bringToFront();
               const scale = Panel.getUiScale();
               const dockedBounds = this.isDocked() ? this.getCurrentBounds() : null;
@@ -16195,6 +16414,7 @@
                   dockedBounds,
                   startClientX: event.clientX,
                   startClientY: event.clientY,
+                  pointerId: event.pointerId ?? null,
                   offsetX: this.isDocked()
                       ? null
                       : (event.clientX / scale) - (Number.parseFloat(this.element.style.left) || 0),
@@ -16203,11 +16423,20 @@
                       : (event.clientY / scale) - (Number.parseFloat(this.element.style.top) || 0),
               };
               handle.style.cursor = 'grabbing';
+              document.body.style.userSelect = 'none';
+              document.body.style.touchAction = 'none';
               event.preventDefault();
           };
   
           this.handleDragMouseMove = (event) => {
               if (!dragState) return;
+              if (
+                  dragState.pointerId != null
+                  && event.pointerId != null
+                  && event.pointerId !== dragState.pointerId
+              ) {
+                  return;
+              }
               const scale = Panel.getUiScale();
   
               if (dragState.startedDocked) {
@@ -16230,12 +16459,21 @@
   
           this.handleDragMouseUp = (event) => {
               if (!dragState) return;
+              if (
+                  dragState.pointerId != null
+                  && event?.pointerId != null
+                  && event.pointerId !== dragState.pointerId
+              ) {
+                  return;
+              }
               const shouldDock = !dragState.startedDocked
                   ? Panel.resolveDockSideForPoint(event.clientX, event.clientY)
                   : null;
   
               dragState = null;
               handle.style.cursor = 'grab';
+              document.body.style.userSelect = '';
+              document.body.style.touchAction = '';
   
               if (shouldDock) {
                   this.dockTo(shouldDock);
@@ -16245,9 +16483,10 @@
               this.updateViewportBounds();
           };
   
-          handle.addEventListener('mousedown', this.handleDragMouseDown);
-          document.addEventListener('mousemove', this.handleDragMouseMove);
-          document.addEventListener('mouseup', this.handleDragMouseUp);
+          handle.addEventListener('pointerdown', this.handleDragMouseDown);
+          document.addEventListener('pointermove', this.handleDragMouseMove);
+          document.addEventListener('pointerup', this.handleDragMouseUp);
+          document.addEventListener('pointercancel', this.handleDragMouseUp);
           this.dragHandle = handle;
       }
   
@@ -16256,19 +16495,30 @@
   
           this.handlePanelResizeMouseDown = (event) => {
               if (this.isDocked() || this.isCollapsed) return;
+              if (!Panel.isPrimaryPointerStart(event)) return;
               this.bringToFront();
               resizeState = {
                   startClientX: event.clientX,
                   startClientY: event.clientY,
                   startBounds: this.getCurrentBounds(),
+                  pointerId: event.pointerId ?? null,
               };
               document.body.style.cursor = 'nwse-resize';
+              document.body.style.userSelect = 'none';
+              document.body.style.touchAction = 'none';
               event.preventDefault();
               event.stopPropagation();
           };
   
           this.handlePanelResizeMouseMove = (event) => {
               if (!resizeState) return;
+              if (
+                  resizeState.pointerId != null
+                  && event.pointerId != null
+                  && event.pointerId !== resizeState.pointerId
+              ) {
+                  return;
+              }
               const scale = Panel.getUiScale();
               const deltaX = (event.clientX - resizeState.startClientX) / scale;
               const deltaY = (event.clientY - resizeState.startClientY) / scale;
@@ -16293,16 +16543,27 @@
               event.preventDefault();
           };
   
-          this.handlePanelResizeMouseUp = () => {
+          this.handlePanelResizeMouseUp = (event = null) => {
               if (!resizeState) return;
+              if (
+                  event
+                  && resizeState.pointerId != null
+                  && event.pointerId != null
+                  && event.pointerId !== resizeState.pointerId
+              ) {
+                  return;
+              }
               resizeState = null;
               document.body.style.removeProperty('cursor');
+              document.body.style.removeProperty('user-select');
+              document.body.style.removeProperty('touch-action');
               this.captureFloatingBounds();
           };
   
-          handle.addEventListener('mousedown', this.handlePanelResizeMouseDown);
-          document.addEventListener('mousemove', this.handlePanelResizeMouseMove);
-          document.addEventListener('mouseup', this.handlePanelResizeMouseUp);
+          handle.addEventListener('pointerdown', this.handlePanelResizeMouseDown);
+          document.addEventListener('pointermove', this.handlePanelResizeMouseMove);
+          document.addEventListener('pointerup', this.handlePanelResizeMouseUp);
+          document.addEventListener('pointercancel', this.handlePanelResizeMouseUp);
           this.resizeHandle = handle;
       }
   
@@ -16653,23 +16914,27 @@
   
       destroy() {
           document.body.style.removeProperty('cursor');
+          document.body.style.removeProperty('user-select');
+          document.body.style.removeProperty('touch-action');
           if (this.resizeHandle && this.handlePanelResizeMouseDown) {
-              this.resizeHandle.removeEventListener('mousedown', this.handlePanelResizeMouseDown);
+              this.resizeHandle.removeEventListener('pointerdown', this.handlePanelResizeMouseDown);
           }
           if (this.handlePanelResizeMouseMove) {
-              document.removeEventListener('mousemove', this.handlePanelResizeMouseMove);
+              document.removeEventListener('pointermove', this.handlePanelResizeMouseMove);
           }
           if (this.handlePanelResizeMouseUp) {
-              document.removeEventListener('mouseup', this.handlePanelResizeMouseUp);
+              document.removeEventListener('pointerup', this.handlePanelResizeMouseUp);
+              document.removeEventListener('pointercancel', this.handlePanelResizeMouseUp);
           }
           if (this.dragHandle && this.handleDragMouseDown) {
-              this.dragHandle.removeEventListener('mousedown', this.handleDragMouseDown);
+              this.dragHandle.removeEventListener('pointerdown', this.handleDragMouseDown);
           }
           if (this.handleDragMouseMove) {
-              document.removeEventListener('mousemove', this.handleDragMouseMove);
+              document.removeEventListener('pointermove', this.handleDragMouseMove);
           }
           if (this.handleDragMouseUp) {
-              document.removeEventListener('mouseup', this.handleDragMouseUp);
+              document.removeEventListener('pointerup', this.handleDragMouseUp);
+              document.removeEventListener('pointercancel', this.handleDragMouseUp);
           }
           if (this.handleResize) {
               window.removeEventListener('resize', this.handleResize);
@@ -16678,7 +16943,7 @@
               window.removeEventListener('dpuiscalechange', this.handleUiScaleChange);
           }
           if (this.handleMouseDown) {
-              this.element.removeEventListener('mousedown', this.handleMouseDown);
+              this.element.removeEventListener('pointerdown', this.handleMouseDown);
           }
           this.leadingHeaderAction?.cleanup?.();
           if (this.isDocked()) {
@@ -17034,7 +17299,7 @@
       body.appendChild(this.output);
       body.appendChild(this.form);
       this.root.appendChild(body);
-      this.panel.headerElement?.addEventListener('mousedown', (event) => {
+      this.panel.headerElement?.addEventListener('pointerdown', (event) => {
         if (event.target instanceof Element && event.target.closest('button')) return;
         this.scheduleInputFocus();
       });
@@ -17217,7 +17482,7 @@
         if (index === this.selectedSuggestionIndex) {
           activeButton = button;
         }
-        button.addEventListener('mousedown', (event) => {
+        button.addEventListener('pointerdown', (event) => {
           event.preventDefault();
         });
         button.addEventListener('mouseenter', () => {
@@ -20976,6 +21241,10 @@
               placeholder: 'componentname.propertyname',
               list: suggestionsId,
           });
+          input.element.autocomplete = 'off';
+          input.element.spellcheck = false;
+          input.element.setAttribute('aria-autocomplete', 'list');
+          input.element.setAttribute('aria-label', 'Search promotable properties');
           const addButton = this.panelHelper.makeButton('success', 'Add', () => {
               const added = container.addManualPromotedPropertyPath(input.element.value);
               if (added) input.setValueFunc('');
@@ -22249,7 +22518,7 @@
               if (index === this.selectedEditorCompletionIndex) {
                   activeButton = button;
               }
-              button.addEventListener('mousedown', (event) => {
+              button.addEventListener('pointerdown', (event) => {
                   event.preventDefault();
               });
               button.addEventListener('mouseenter', () => {
@@ -22691,8 +22960,8 @@
           this.root = this.panel.addPanelItem('root');
           this.root.parentElement.style.flex = '1 1 auto';
           this.root.parentElement.style.minHeight = '0';
+          this.root.classList.add('dp-log-layout');
           this.root.style.display = 'grid';
-          this.root.style.gridTemplateColumns = '220px minmax(0, 1fr)';
           this.root.style.gap = '12px';
           this.root.style.flex = '1 1 auto';
           this.root.style.minHeight = '0';
@@ -23921,7 +24190,7 @@
               if (index === this.selectedEntrySuggestionIndex) {
                   activeButton = button;
               }
-              button.addEventListener('mousedown', (event) => {
+              button.addEventListener('pointerdown', (event) => {
                   event.preventDefault();
               });
               button.addEventListener('mouseenter', () => {
@@ -24152,7 +24421,7 @@
               && this.panelDockIconPickerScope
               && this.isDockIconPickerDismissBound !== true
           ) {
-              document.addEventListener('mousedown', this.handleDockIconPickerDocumentMouseDown, true);
+              document.addEventListener('pointerdown', this.handleDockIconPickerDocumentMouseDown, true);
               this.isDockIconPickerDismissBound = true;
               return;
           }
@@ -24167,7 +24436,7 @@
   
       detachDockIconPickerDismissHandlers() {
           if (this.isDockIconPickerDismissBound !== true) return;
-          document.removeEventListener('mousedown', this.handleDockIconPickerDocumentMouseDown, true);
+          document.removeEventListener('pointerdown', this.handleDockIconPickerDocumentMouseDown, true);
           this.isDockIconPickerDismissBound = false;
       }
   
@@ -24993,6 +25262,7 @@
     select,
     textarea {
       font: inherit;
+      touch-action: manipulation;
     }
 
     input,
@@ -25236,11 +25506,32 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
+      overscroll-behavior: none;
       color-scheme: light;
       background: var(--page-bg);
       color: var(--panel-text);
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       transition: background 160ms ease, color 160ms ease;
+    }
+
+    #app-root {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    #container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    #container > div,
+    #container canvas {
+      touch-action: none;
     }
 
     #dp-ui-root {
@@ -25425,6 +25716,7 @@
       z-index: 2;
       border-radius: 999px;
       opacity: 0.92;
+      touch-action: none;
     }
 
     .dp-panel-dock-resize-handle-left,
@@ -25653,7 +25945,11 @@
       flex-wrap: nowrap;
       align-items: center;
       gap: 12px;
-      padding: 12px 22px;
+      padding:
+        calc(12px + env(safe-area-inset-top))
+        calc(22px + env(safe-area-inset-right))
+        12px
+        calc(22px + env(safe-area-inset-left));
       width: 100%;
       max-width: none;
       box-sizing: border-box;
@@ -25722,6 +26018,7 @@
           transparent 84%
         );
       opacity: 0.9;
+      touch-action: none;
     }
 
     .dp-panel.is-docked .dp-panel-resize-handle,
@@ -25761,6 +26058,7 @@
       padding-bottom: 12px;
       border-bottom: 1px solid var(--panel-line);
       user-select: none;
+      touch-action: none;
     }
 
     .dp-panel-header-text {
@@ -25813,6 +26111,7 @@
       outline: none;
       box-shadow: var(--panel-control-shadow);
       transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease;
+      touch-action: manipulation;
     }
 
     .dp-panel-toggle:focus {
@@ -25928,6 +26227,7 @@
       outline: none;
       box-shadow: var(--panel-control-shadow);
       transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease;
+      touch-action: manipulation;
     }
 
     .dp-btn:hover:not(:disabled) {
@@ -26192,6 +26492,10 @@
 
     .dp-form-row:not(.dp-form-row-wide) {
       grid-template-columns: 1fr auto;
+    }
+
+    .dp-log-layout {
+      grid-template-columns: 220px minmax(0, 1fr);
     }
 
     .dp-form-main,
@@ -27922,6 +28226,7 @@
       font-weight: 600;
       outline: none;
       box-shadow: var(--panel-input-shadow);
+      touch-action: manipulation;
     }
 
     .dp-input:focus {
@@ -27998,14 +28303,66 @@
       display: block;
     }
 
+    @media (hover: none), (pointer: coarse) {
+      .dp-panel-toggle {
+        width: 40px;
+        height: 40px;
+      }
+
+      .dp-btn,
+      .dp-input,
+      .dp-topbar-select,
+      .dp-panel-dock-tab {
+        min-height: 44px;
+      }
+
+      .dp-panel-resize-handle {
+        right: 2px;
+        bottom: 2px;
+        width: 28px;
+        height: 28px;
+      }
+
+      .dp-panel-dock-resize-handle-left,
+      .dp-panel-dock-resize-handle-right {
+        width: 20px;
+      }
+
+      .dp-panel-dock-resize-handle-top,
+      .dp-panel-dock-resize-handle-bottom {
+        height: 20px;
+      }
+
+      .dp-control-design-drag-handle {
+        width: 40px;
+        min-width: 40px;
+      }
+    }
+
     @media (max-width: 860px) {
       .dp-topbar {
+        flex-wrap: wrap;
+        align-items: flex-start;
         gap: 8px;
-        padding: 10px 16px;
+        overflow-x: visible;
+        overflow-y: auto;
+        padding:
+          calc(10px + env(safe-area-inset-top))
+          calc(16px + env(safe-area-inset-right))
+          10px
+          calc(16px + env(safe-area-inset-left));
+      }
+
+      .dp-topbar-group {
+        flex-wrap: wrap;
       }
 
       .dp-topbar-group + .dp-topbar-group {
         padding-left: 10px;
+      }
+
+      .dp-log-layout {
+        grid-template-columns: 1fr;
       }
 
       .dp-code-layout {
@@ -28030,7 +28387,34 @@
       .dp-inspector-property-config {
         grid-template-columns: 1fr;
       }
+    }
 
+    @media (max-width: 680px) {
+      .dp-panel {
+        padding: 16px;
+        border-radius: 20px;
+      }
+
+      .dp-topbar-select {
+        width: min(100%, 220px);
+        min-width: 140px;
+      }
+
+      .dp-form-row,
+      .dp-form-row:not(.dp-form-row-wide) {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .dp-form-actions,
+      .dp-inspector-property-main-row .dp-form-actions {
+        justify-content: flex-start;
+      }
+
+      .dp-settings-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
@@ -28038,7 +28422,7 @@
 <body onload="start()">
   <!-- <div style="position: absolute; left: 40px;  top: 40px; z-index: 100000; ">HELLO</div> -->
   <!-- style=" background-color: #002082;" -->
-  <div id="app-root" style="position:relative">
+  <div id="app-root">
     <div id="container"></div>
   </div>
   <div id="dp-ui-root"></div>
