@@ -12028,7 +12028,7 @@
               },
               {
                 "id": "project:persistence",
-                "visible": true,
+                "visible": false,
                 "dockSide": null,
                 "floatingBounds": {
                   "left": 73.7144,
@@ -12074,7 +12074,7 @@
             "docks": [
               {
                 "side": "right",
-                "collapsed": false,
+                "collapsed": true,
                 "activePanelId": "workspace:inspector",
                 "panelIds": [
                   "workspace:help",
@@ -18951,12 +18951,6 @@
               }
   
               this.projectController.workspacePersistence.loadSnapshot(sampleWorkspaceSnapshot);
-              this.helpPanel.open();
-              this.controlPanelsPanel.panel.open();
-              const firstControlPanel = this.workspace?.getControlPanels?.()?.[0] ?? null;
-              if (firstControlPanel) {
-                  this.controlPanelsPanel.ensureControlPanelWindow(firstControlPanel).open(ControlPanelWindow.modeView);
-              }
   
               this.projectController.saveActiveWorkspaceSnapshot?.(false);
               if (this.loadTextarea) {
