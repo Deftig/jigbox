@@ -11294,6 +11294,8 @@
   class ProjectPersistence {
   
     static version = 2;
+    static browserCacheVersion = 1;
+    static browserCacheStorageKey = 'doublephi:project-browser-cache';
   
     constructor(projectController, logger) {
       this.projectController = projectController;
@@ -11301,7 +11303,7 @@
     }
   
     serialize() {
-      return JSON.stringify(this.buildSnapshot(), null, 2);
+      return this.serializeSnapshot(this.buildSnapshot());
     }
   
     buildSnapshot() {
@@ -11316,6 +11318,10 @@
       };
     }
   
+    serializeSnapshot(snapshot = null) {
+      return JSON.stringify(snapshot ?? this.buildSnapshot(), null, 2);
+    }
+  
     async saveToClipboard() {
       const serialized = this.serialize();
       await navigator.clipboard.writeText(serialized);
@@ -11324,12 +11330,16 @@
     }
   
     downloadToFile(filename = null) {
-      const serialized = this.serialize();
+      return this.downloadSnapshotToFile(this.buildSnapshot(), filename);
+    }
+  
+    downloadSnapshotToFile(snapshot, filename = null) {
+      const serialized = this.serializeSnapshot(snapshot);
       const blob = new Blob([serialized], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filename || this.buildDownloadFilename();
+      link.download = filename || this.buildDownloadFilename(snapshot?.name);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -11351,6 +11361,92 @@
     loadSnapshot(snapshot) {
       const migratedSnapshot = this.migrateSnapshot(snapshot);
       this.projectController.loadProjectSnapshot(migratedSnapshot);
+    }
+  
+    isBrowserCacheAvailable() {
+      return this.getBrowserCacheStorage() != null;
+    }
+  
+    getBrowserCacheProjectSummaries() {
+      return this.readBrowserCacheEntries()
+        .map((entry, index) => this.normalizeBrowserCacheEntry(entry, index))
+        .filter(Boolean)
+        .sort((entry1, entry2) => (
+          this.getBrowserCacheTimestampSortValue(entry2.savedAt)
+          - this.getBrowserCacheTimestampSortValue(entry1.savedAt)
+        ))
+        .map((entry) => this.buildBrowserCacheProjectSummary(entry))
+        .filter(Boolean);
+    }
+  
+    saveToBrowserCache(name = null) {
+      const snapshot = this.buildSnapshot();
+      const projectName = Project.normalizeName(
+        name ?? snapshot?.name ?? this.projectController.getProjectName?.(),
+        Project.defaultName,
+      );
+      const entries = this.readBrowserCacheEntries();
+      const savedAt = new Date().toISOString();
+      const normalizedName = projectName.toLowerCase();
+      const existingIndex = entries.findIndex((entry, index) => {
+        const normalizedEntry = this.normalizeBrowserCacheEntry(entry, index);
+        return normalizedEntry?.name?.toLowerCase?.() === normalizedName;
+      });
+      const existingEntry = existingIndex >= 0
+        ? this.normalizeBrowserCacheEntry(entries[existingIndex], existingIndex)
+        : null;
+      const nextEntry = {
+        id: existingEntry?.id ?? this.createBrowserCacheEntryId(projectName, savedAt),
+        name: projectName,
+        savedAt,
+        snapshot,
+      };
+  
+      if (existingIndex >= 0) {
+        entries.splice(existingIndex, 1, nextEntry);
+      } else {
+        entries.push(nextEntry);
+      }
+      this.writeBrowserCacheEntries(entries);
+      return this.buildBrowserCacheProjectSummary(nextEntry);
+    }
+  
+    loadFromBrowserCache(entryId) {
+      const entryRecord = this.getBrowserCacheProjectEntryRecord(entryId);
+      if (!entryRecord?.entry) {
+        throw new Error('Saved browser project not found.');
+      }
+      this.loadSnapshot(entryRecord.entry.snapshot);
+      return this.buildBrowserCacheProjectSummary(entryRecord.entry);
+    }
+  
+    downloadBrowserCacheProject(entryId, filename = null) {
+      const entryRecord = this.getBrowserCacheProjectEntryRecord(entryId);
+      if (!entryRecord?.entry) {
+        throw new Error('Saved browser project not found.');
+      }
+  
+      const resolvedFilename = filename || this.buildDownloadFilename(
+        entryRecord.entry.name,
+        entryRecord.entry.savedAt,
+      );
+      const serialized = this.downloadSnapshotToFile(entryRecord.entry.snapshot, resolvedFilename);
+      return {
+        ...this.buildBrowserCacheProjectSummary(entryRecord.entry),
+        serialized,
+      };
+    }
+  
+    deleteBrowserCacheProject(entryId) {
+      const entryRecord = this.getBrowserCacheProjectEntryRecord(entryId);
+      if (!entryRecord?.entry) {
+        throw new Error('Saved browser project not found.');
+      }
+  
+      const entries = this.readBrowserCacheEntries();
+      entries.splice(entryRecord.index, 1);
+      this.writeBrowserCacheEntries(entries);
+      return this.buildBrowserCacheProjectSummary(entryRecord.entry);
     }
   
     migrateSnapshot(snapshot) {
@@ -11503,14 +11599,142 @@
           : 'component';
     }
   
-    buildDownloadFilename() {
-      const projectName = this.projectController.getProjectName()
+    getBrowserCacheStorage() {
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          return window.localStorage;
+        }
+        if (typeof globalThis !== 'undefined' && globalThis.localStorage) {
+          return globalThis.localStorage;
+        }
+      } catch (error) {
+        return null;
+      }
+      return null;
+    }
+  
+    readBrowserCacheEntries() {
+      const storage = this.getBrowserCacheStorage();
+      if (!storage) return [];
+  
+      try {
+        const rawValue = storage.getItem(ProjectPersistence.browserCacheStorageKey);
+        if (!rawValue) return [];
+        const parsedValue = JSON.parse(rawValue);
+        if (Array.isArray(parsedValue)) return parsedValue;
+        if (Array.isArray(parsedValue?.entries)) return parsedValue.entries;
+      } catch (error) {
+        return [];
+      }
+  
+      return [];
+    }
+  
+    writeBrowserCacheEntries(entries) {
+      const storage = this.getBrowserCacheStorage();
+      if (!storage) {
+        throw new Error('Browser storage is not available.');
+      }
+  
+      storage.setItem(ProjectPersistence.browserCacheStorageKey, JSON.stringify({
+        version: ProjectPersistence.browserCacheVersion,
+        entries: Array.isArray(entries) ? entries : [],
+      }));
+    }
+  
+    normalizeBrowserCacheEntry(entry, index = 0) {
+      if (!entry || typeof entry !== 'object') return null;
+  
+      let snapshot = null;
+      try {
+        snapshot = this.migrateSnapshot(entry.snapshot ?? entry.project ?? null);
+      } catch (error) {
+        return null;
+      }
+  
+      if (!snapshot) return null;
+  
+      const fallbackName = `${Project.defaultName} ${Number(index) + 1}`;
+      const name = Project.normalizeName(entry.name ?? snapshot.name, fallbackName);
+      const id = typeof entry.id === 'string' && entry.id.trim()
+        ? entry.id.trim()
+        : this.createBrowserCacheEntryId(name, entry.savedAt, index);
+      return {
+        id,
+        name,
+        savedAt: this.normalizeBrowserCacheTimestamp(entry.savedAt),
+        snapshot,
+      };
+    }
+  
+    buildBrowserCacheProjectSummary(entry) {
+      const normalizedEntry = this.normalizeBrowserCacheEntry(entry);
+      if (!normalizedEntry) return null;
+  
+      return {
+        id: normalizedEntry.id,
+        name: normalizedEntry.name,
+        savedAt: normalizedEntry.savedAt,
+        workspaceCount: normalizedEntry.snapshot?.workspaces?.length ?? 0,
+      };
+    }
+  
+    normalizeBrowserCacheTimestamp(value) {
+      const timestamp = value instanceof Date ? value.toISOString() : String(value ?? '').trim();
+      const dateValue = new Date(timestamp);
+      if (Number.isNaN(dateValue.getTime())) return null;
+      return dateValue.toISOString();
+    }
+  
+    getBrowserCacheTimestampSortValue(value) {
+      const timestamp = Date.parse(value ?? '');
+      return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+  
+    createBrowserCacheEntryId(name = '', savedAt = null, index = null) {
+      const normalizedName = String(name ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'project';
+      const savedAtToken = String(savedAt ?? '')
+        .replace(/[^0-9]+/g, '')
+        .slice(0, 14)
+        || `${Date.now()}`;
+      const suffix = Number.isInteger(index) ? `-${index + 1}` : '';
+      return `${normalizedName}-${savedAtToken}${suffix}`;
+    }
+  
+    getBrowserCacheProjectEntryRecord(entryId) {
+      const normalizedEntryId = String(entryId ?? '').trim();
+      if (!normalizedEntryId) return null;
+  
+      const entries = this.readBrowserCacheEntries();
+      for (let index = 0; index < entries.length; index += 1) {
+        const normalizedEntry = this.normalizeBrowserCacheEntry(entries[index], index);
+        if (normalizedEntry?.id === normalizedEntryId) {
+          return {
+            index,
+            entry: normalizedEntry,
+          };
+        }
+      }
+      return null;
+    }
+  
+    buildDownloadFilename(projectName = null, timestamp = null) {
+      const resolvedProjectName = Project.normalizeName(
+        projectName ?? this.projectController.getProjectName?.(),
+        'jigbox-project',
+      );
+      const normalizedTimestamp = this.normalizeBrowserCacheTimestamp(timestamp) ?? new Date().toISOString();
+      const projectNameToken = resolvedProjectName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         || 'jigbox-project';
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      return `${projectName}-${timestamp}.json`;
+      const timestampToken = normalizedTimestamp.replace(/[:.]/g, '-');
+      return `${projectNameToken}-${timestampToken}.json`;
     }
   }
   </script>
@@ -12320,7 +12544,7 @@
       { name: 'del', summary: 'Delete an item or element', appendSpace: true },
       { name: 'conn', summary: 'Create a connection', appendSpace: true },
       { name: 'delconn', summary: 'Delete a connection', appendSpace: true },
-      { name: 'mv', summary: 'Move an item into a container', appendSpace: true },
+      { name: 'mv', summary: 'Move an item into a container or another workspace', appendSpace: true },
       { name: 'workspace', summary: 'Create a new workspace', appendSpace: true },
       { name: 'exit', summary: 'Close the command line', appendSpace: false },
     ]);
@@ -12353,6 +12577,7 @@
       'conn <component.element> <component.element>',
       'delconn <component.element> <component.element>',
       'mv <item name> <container name>',
+      'mv <item name> <workspace name> [container name]',
       'workspace <name>',
       'exit',
       'Tip: quote names with spaces when needed.',
@@ -12859,7 +13084,9 @@
       const exactSourceMatches = this.getAutocompleteCatalogExactMatches(sourceCatalog, getSourceLabel, joinedSource);
       if (parsed.endedInWhitespace && exactSourceMatches.length > 0) {
         const movingItem = exactSourceMatches.length === 1 ? exactSourceMatches[0] : null;
-        return this.getContainerAutocompleteSuggestions('', input, input.length, input.length, { movingItem });
+        return this.getCopyDestinationAutocompleteSuggestions('', input, input.length, input.length, {
+          localContainerCatalog: this.getMoveTargetCatalog(movingItem),
+        });
       }
   
       if (!parsed.endedInWhitespace && this.hasAutocompleteCatalogSuggestions(sourceCatalog, getSourceLabel, joinedSource)) {
@@ -12874,20 +13101,13 @@
         const sourceName = this.getJoinedAutocompleteTokenValue(args.slice(0, sourcePrefixLength));
         const sourceMatches = this.getAutocompleteCatalogExactMatches(sourceCatalog, getSourceLabel, sourceName);
         const movingItem = sourceMatches.length === 1 ? sourceMatches[0] : null;
-        const targetCatalog = this.getMoveTargetCatalog(movingItem);
-        return this.getLastTokenGroupAutocompleteSuggestions(
+        return this.getCopyDestinationGroupAutocompleteSuggestions(
           args.slice(sourcePrefixLength),
           parsed,
           input,
-          targetCatalog,
-          (container) => container.name,
-          (partialValue, autocompleteInput, replaceStart, replaceEnd) => this.getContainerAutocompleteSuggestions(
-            partialValue,
-            autocompleteInput,
-            replaceStart,
-            replaceEnd,
-            { movingItem },
-          ),
+          {
+            localContainerCatalog: this.getMoveTargetCatalog(movingItem),
+          },
         );
       }
   
@@ -13335,9 +13555,12 @@
       ));
     }
   
-    getCopyDestinationAutocompleteSuggestions(partialValue, input, replaceStart, replaceEnd) {
+    getCopyDestinationAutocompleteSuggestions(partialValue, input, replaceStart, replaceEnd, options = {}) {
+      const localContainerCatalog = Array.isArray(options.localContainerCatalog)
+        ? options.localContainerCatalog
+        : this.getCopyCurrentWorkspaceContainerCatalog();
       const containerSuggestions = this.filterAndSortAutocompleteMatches(
-        this.getCopyCurrentWorkspaceContainerCatalog(),
+        localContainerCatalog,
         (container) => container.name,
         partialValue,
       ).map((container) => (
@@ -13362,21 +13585,34 @@
       return [...containerSuggestions, ...workspaceSuggestions].slice(0, 12);
     }
   
-    getCopyDestinationGroupAutocompleteSuggestions(tokens, parsed, input) {
+    getCopyDestinationGroupAutocompleteSuggestions(tokens, parsed, input, options = {}) {
       if (!(tokens ?? []).length) {
-        return this.getCopyDestinationAutocompleteSuggestions('', input, input.length, input.length);
+        return this.getCopyDestinationAutocompleteSuggestions('', input, input.length, input.length, options);
       }
   
       const joinedValue = this.getJoinedAutocompleteTokenValue(tokens);
       const range = this.getAutocompleteTokenRange(tokens, input, parsed?.endedInWhitespace === true);
+      const localContainerCatalog = Array.isArray(options.localContainerCatalog)
+        ? options.localContainerCatalog
+        : this.getCopyCurrentWorkspaceContainerCatalog();
+      const getLocalContainerLabel = (container) => container.name;
       const workspaceCatalog = this.getWorkspaceSummaries();
       const getWorkspaceLabel = (workspaceSummary) => workspaceSummary.name;
+      const exactLocalContainerMatches = this.getAutocompleteCatalogExactMatches(
+        localContainerCatalog,
+        getLocalContainerLabel,
+        joinedValue,
+      );
       const exactWorkspaceMatches = this.getAutocompleteCatalogExactMatches(
         workspaceCatalog,
         getWorkspaceLabel,
         joinedValue,
       );
-      if (parsed?.endedInWhitespace === true && exactWorkspaceMatches.length === 1) {
+      if (
+        parsed?.endedInWhitespace === true
+        && exactWorkspaceMatches.length === 1
+        && exactLocalContainerMatches.length === 0
+      ) {
         return this.getWorkspaceContainerAutocompleteSuggestions(
           exactWorkspaceMatches[0].id,
           '',
@@ -13384,6 +13620,13 @@
           input.length,
           input.length,
         );
+      }
+      if (
+        parsed?.endedInWhitespace === true
+        && exactLocalContainerMatches.length > 0
+        && exactWorkspaceMatches.length === 0
+      ) {
+        return [];
       }
   
       const workspacePrefixLength = this.findLongestExactAutocompletePrefixLength(
@@ -13415,7 +13658,7 @@
         }
       }
   
-      return this.getCopyDestinationAutocompleteSuggestions(joinedValue, input, range.start, range.end);
+      return this.getCopyDestinationAutocompleteSuggestions(joinedValue, input, range.start, range.end, options);
     }
   
     getRenameTargetAutocompleteSuggestions(partialValue, input, replaceStart, replaceEnd, isInlineRename = false) {
@@ -14021,25 +14264,92 @@
         return this.buildError(`Could not find an item named "${resolvedNames.sourceName}".`);
       }
   
-      const targetMatches = this.findNamedItems(resolvedNames.targetName, { containerOnly: true });
-      if (!targetMatches.length) {
-        return this.buildError(`Could not find a container named "${resolvedNames.targetName}".`);
-      }
-      if (targetMatches.length > 1) {
-        return this.buildError(`Found ${targetMatches.length} containers named "${resolvedNames.targetName}". Use a unique name.`);
+      let targetContainer = null;
+      let targetContainerName = null;
+      let targetWorkspaceSummary = null;
+  
+      if (resolvedNames.destinationName) {
+        const targetMatches = this.findNamedItems(resolvedNames.destinationName, { containerOnly: true });
+        const workspaceMatches = this.findNamedWorkspaceSummaries(resolvedNames.destinationName);
+        if (targetMatches.length > 0 && workspaceMatches.length > 0) {
+          return this.buildError(`"${resolvedNames.destinationName}" matches both a container and a workspace. Use a unique name.`);
+        }
+        if (workspaceMatches.length > 1) {
+          return this.buildError(`Found ${workspaceMatches.length} workspaces named "${resolvedNames.destinationName}". Use a unique name.`);
+        }
+        if (workspaceMatches.length === 1) {
+          [targetWorkspaceSummary] = workspaceMatches;
+        } else {
+          if (!targetMatches.length) {
+            return this.buildError(`Could not find a container or workspace named "${resolvedNames.destinationName}".`);
+          }
+          if (targetMatches.length > 1) {
+            return this.buildError(`Found ${targetMatches.length} containers named "${resolvedNames.destinationName}". Use a unique name.`);
+          }
+          [targetContainer] = targetMatches;
+          targetContainerName = targetContainer.name;
+        }
       }
   
-      const targetContainer = targetMatches[0];
-      const moveValidationError = this.validateMoveTargets(sourceMatches, targetContainer);
-      if (moveValidationError) {
-        return this.buildError(moveValidationError);
+      if (resolvedNames.workspaceName) {
+        const workspaceMatches = this.findNamedWorkspaceSummaries(resolvedNames.workspaceName);
+        if (!workspaceMatches.length) {
+          return this.buildError(`Could not find a workspace named "${resolvedNames.workspaceName}".`);
+        }
+        if (workspaceMatches.length > 1) {
+          return this.buildError(`Found ${workspaceMatches.length} workspaces named "${resolvedNames.workspaceName}". Use a unique name.`);
+        }
+        [targetWorkspaceSummary] = workspaceMatches;
+      }
+  
+      if (resolvedNames.containerName) {
+        if (targetWorkspaceSummary && !this.isActiveWorkspaceSummary(targetWorkspaceSummary)) {
+          const targetMatches = this.projectController?.findContainersInWorkspaceByName?.(
+            targetWorkspaceSummary.id,
+            resolvedNames.containerName,
+          ) ?? [];
+          if (!targetMatches.length) {
+            return this.buildError(`Could not find a container named "${resolvedNames.containerName}" in workspace "${targetWorkspaceSummary.name}".`);
+          }
+          if (targetMatches.length > 1) {
+            return this.buildError(`Found ${targetMatches.length} containers named "${resolvedNames.containerName}" in workspace "${targetWorkspaceSummary.name}". Use a unique name.`);
+          }
+          targetContainerName = targetMatches[0].name ?? resolvedNames.containerName;
+        } else {
+          const targetMatches = this.findNamedItems(resolvedNames.containerName, { containerOnly: true });
+          if (!targetMatches.length) {
+            return this.buildError(`Could not find a container named "${resolvedNames.containerName}".`);
+          }
+          if (targetMatches.length > 1) {
+            return this.buildError(`Found ${targetMatches.length} containers named "${resolvedNames.containerName}". Use a unique name.`);
+          }
+          [targetContainer] = targetMatches;
+          targetContainerName = targetContainer.name;
+        }
+      }
+  
+      if (targetWorkspaceSummary && this.isActiveWorkspaceSummary(targetWorkspaceSummary) === true && !targetContainer) {
+        return this.buildError(`Use a container name to move items within workspace "${targetWorkspaceSummary.name}".`);
+      }
+  
+      const isRemoteWorkspaceTarget = targetWorkspaceSummary
+        && this.isActiveWorkspaceSummary(targetWorkspaceSummary) !== true;
+      if (!isRemoteWorkspaceTarget) {
+        const moveValidationError = this.validateMoveTargets(sourceMatches, targetContainer);
+        if (moveValidationError) {
+          return this.buildError(moveValidationError);
+        }
       }
   
       if (sourceMatches.length > 1) {
         return this.requestBulkActionConfirmation(
           sourceMatches.length,
           'item',
-          () => this.applyMoveItems(sourceMatches, targetContainer),
+          () => this.applyMoveItems(sourceMatches, {
+            targetContainer,
+            targetContainerName,
+            targetWorkspaceSummary,
+          }),
           {
             messagePrefix: `"${resolvedNames.sourceName}" matches ${this.buildCountLabel(sourceMatches.length, 'item')}.`,
             cancelMessage: 'Move cancelled.',
@@ -14047,7 +14357,11 @@
         );
       }
   
-      return this.applyMoveItems(sourceMatches, targetContainer);
+      return this.applyMoveItems(sourceMatches, {
+        targetContainer,
+        targetContainerName,
+        targetWorkspaceSummary,
+      });
     }
   
     copyItem(args) {
@@ -14150,22 +14464,74 @@
   
     resolveMoveNames(args) {
       if ((args ?? []).length < 2) {
-        return { error: 'Usage: mv <item name> <container name>' };
+        return { error: 'Usage: mv <item name> <container name> | mv <item name> <workspace name> [container name]' };
       }
   
       const candidates = [];
+      const addCandidate = (sourceName, options = {}) => {
+        const normalizedSourceName = typeof sourceName === 'string' ? sourceName.trim() : '';
+        if (!normalizedSourceName) return;
+        const workspaceName = typeof options.workspaceName === 'string' ? options.workspaceName.trim() : null;
+        const containerName = typeof options.containerName === 'string' ? options.containerName.trim() : null;
+        const destinationName = typeof options.destinationName === 'string' ? options.destinationName.trim() : null;
+        const key = [
+          normalizedSourceName.toLowerCase(),
+          workspaceName?.toLowerCase?.() ?? '',
+          containerName?.toLowerCase?.() ?? '',
+          destinationName?.toLowerCase?.() ?? '',
+        ].join(':');
+        if (candidates.some((candidate) => candidate.key === key)) return;
+        candidates.push({
+          key,
+          sourceName: normalizedSourceName,
+          workspaceName,
+          containerName,
+          destinationName,
+        });
+      };
+  
       for (let splitIndex = 1; splitIndex < args.length; splitIndex += 1) {
         const sourceName = args.slice(0, splitIndex).join(' ').trim();
-        const targetName = args.slice(splitIndex).join(' ').trim();
-        if (!sourceName || !targetName) continue;
+        const destinationName = args.slice(splitIndex).join(' ').trim();
+        if (!sourceName || !destinationName) continue;
   
         const sourceMatches = this.findNamedItems(sourceName);
-        const targetMatches = this.findNamedItems(targetName, { containerOnly: true });
-        if (!sourceMatches.length || !targetMatches.length) continue;
+        if (!sourceMatches.length) continue;
   
-        const key = `${sourceName.toLowerCase()}:${targetName.toLowerCase()}`;
-        if (candidates.some((candidate) => candidate.key === key)) continue;
-        candidates.push({ key, sourceName, targetName });
+        if (this.findNamedItems(destinationName, { containerOnly: true }).length) {
+          addCandidate(sourceName, { containerName: destinationName });
+        }
+        if (this.findNamedWorkspaceSummaries(destinationName).length) {
+          addCandidate(sourceName, { workspaceName: destinationName });
+        }
+      }
+  
+      for (let sourceSplitIndex = 1; sourceSplitIndex < args.length - 1; sourceSplitIndex += 1) {
+        const sourceName = args.slice(0, sourceSplitIndex).join(' ').trim();
+        if (!sourceName || !this.findNamedItems(sourceName).length) continue;
+  
+        for (let workspaceSplitIndex = sourceSplitIndex + 1; workspaceSplitIndex < args.length; workspaceSplitIndex += 1) {
+          const workspaceName = args.slice(sourceSplitIndex, workspaceSplitIndex).join(' ').trim();
+          const containerName = args.slice(workspaceSplitIndex).join(' ').trim();
+          if (!workspaceName || !containerName) continue;
+  
+          const workspaceMatches = this.findNamedWorkspaceSummaries(workspaceName);
+          if (!workspaceMatches.length) continue;
+  
+          const hasContainerMatch = workspaceMatches.some((workspaceSummary) => {
+            if (this.isActiveWorkspaceSummary(workspaceSummary)) {
+              return this.findNamedItems(containerName, { containerOnly: true }).length > 0;
+            }
+            const targetMatches = this.projectController?.findContainersInWorkspaceByName?.(
+              workspaceSummary.id,
+              containerName,
+            ) ?? [];
+            return targetMatches.length > 0;
+          });
+          if (!hasContainerMatch) continue;
+  
+          addCandidate(sourceName, { workspaceName, containerName });
+        }
       }
   
       if (candidates.length === 1) {
@@ -14173,17 +14539,28 @@
       }
   
       if (candidates.length > 1) {
-        return { error: 'Move command is ambiguous. Quote the item and container names.' };
+        return { error: 'Move command is ambiguous. Quote the item, workspace, or container name.' };
       }
   
       if (args.length === 2) {
         return {
           sourceName: args[0],
-          targetName: args[1],
+          destinationName: args[1],
+          workspaceName: null,
+          containerName: null,
         };
       }
   
-      return { error: 'Move command is ambiguous. Quote the item and container names.' };
+      if (args.length === 3) {
+        return {
+          sourceName: args[0],
+          workspaceName: args[1],
+          containerName: args[2],
+          destinationName: null,
+        };
+      }
+  
+      return { error: 'Move command is ambiguous. Quote the item, workspace, or container name.' };
     }
   
     resolveCopyNames(args) {
@@ -14419,8 +14796,47 @@
       return '';
     }
   
-    applyMoveItems(items, targetContainer) {
+    applyMoveItems(items, options = {}) {
+      const {
+        targetContainer = null,
+        targetContainerName = null,
+        targetWorkspaceSummary = null,
+      } = options;
       const uniqueItems = Array.from(new Set(items ?? []));
+      const isRemoteWorkspaceTarget = targetWorkspaceSummary
+        && this.isActiveWorkspaceSummary(targetWorkspaceSummary) !== true;
+      if (isRemoteWorkspaceTarget) {
+        const movedItems = uniqueItems
+          .map((item) => this.moveItemToWorkspace(item, targetWorkspaceSummary, targetContainerName))
+          .filter(Boolean);
+        if (!movedItems.length) {
+          return this.buildInfo('Nothing to move.');
+        }
+  
+        this.workspace.clearSelection?.();
+        this.workspace.observable?.fireFieldListener?.('selected', null);
+  
+        if (movedItems.length === 1) {
+          const movedItem = movedItems[0];
+          const destinationLabel = targetContainerName
+            ? `container "${targetContainerName}" in workspace "${targetWorkspaceSummary.name}"`
+            : `workspace "${targetWorkspaceSummary.name}"`;
+          return this.buildSuccess(
+            `Moved ${movedItem.rootType} "${movedItem.copiedRootName}" to ${destinationLabel}.`,
+          );
+        }
+  
+        if (targetContainerName) {
+          return this.buildSuccess(
+            `Moved ${movedItems.length} matching items to container "${targetContainerName}" in workspace "${targetWorkspaceSummary.name}".`,
+          );
+        }
+  
+        return this.buildSuccess(
+          `Moved ${movedItems.length} matching items to workspace "${targetWorkspaceSummary.name}".`,
+        );
+      }
+  
       uniqueItems.forEach((item) => {
         this.moveItemToContainer(item, targetContainer);
       });
@@ -14675,6 +15091,15 @@
         containerName: targetContainerName,
         selectInserted: false,
       });
+    }
+  
+    moveItemToWorkspace(item, targetWorkspaceSummary, targetContainerName = null) {
+      if (!Workspace.isModelItem(item)) return null;
+  
+      const movedItem = this.copyItemToWorkspace(item, targetWorkspaceSummary, targetContainerName);
+      if (!movedItem) return null;
+      item.softDelete?.();
+      return movedItem;
     }
   
     getRenameTargetKey(target) {
@@ -16209,14 +16634,20 @@
       }
   
       static beginDockResize(dock, event) {
-          if (!dock?.activePanel || dock.collapsed) return;
+          if (!dock?.activePanel) return;
           if (!Panel.isPrimaryPointerStart(event)) return;
           const scale = Panel.getUiScale();
+          const collapsedSize = Panel.getDockCollapsedSize(dock.side);
           dock.resizeState = {
               startClientX: event.clientX / scale,
               startClientY: event.clientY / scale,
-              startWidth: dock.size.width,
-              startHeight: dock.size.height,
+              startWidth: dock.collapsed
+                  ? collapsedSize
+                  : dock.size.width,
+              startHeight: dock.collapsed
+                  ? collapsedSize
+                  : dock.size.height,
+              startedCollapsed: dock.collapsed === true,
               pointerId: event.pointerId ?? null,
           };
           document.body.style.cursor = Panel.isSideDock(dock.side) ? 'ew-resize' : 'ns-resize';
@@ -16239,19 +16670,46 @@
           const pointerX = event.clientX / scale;
           const pointerY = event.clientY / scale;
           const sizeBounds = Panel.getDockSizeBounds(dock.side);
+          const collapsedSize = Panel.getDockCollapsedSize(dock.side);
   
           if (Panel.isSideDock(dock.side)) {
               const deltaX = pointerX - dock.resizeState.startClientX;
               const nextWidth = dock.side === 'left'
                   ? dock.resizeState.startWidth + deltaX
                   : dock.resizeState.startWidth - deltaX;
-              dock.size.width = Panel.clamp(nextWidth, sizeBounds.min, sizeBounds.max);
+              if (nextWidth <= collapsedSize) {
+                  Panel.setDockCollapsed(dock, true);
+                  return;
+              }
+              if (dock.collapsed) {
+                  Panel.setDockCollapsed(dock, false);
+              }
+              dock.size.width = Panel.clamp(
+                  dock.resizeState.startedCollapsed
+                      ? Math.max(sizeBounds.min, nextWidth)
+                      : nextWidth,
+                  sizeBounds.min,
+                  sizeBounds.max,
+              );
           } else {
               const deltaY = pointerY - dock.resizeState.startClientY;
               const nextHeight = dock.side === 'top'
                   ? dock.resizeState.startHeight + deltaY
                   : dock.resizeState.startHeight - deltaY;
-              dock.size.height = Panel.clamp(nextHeight, sizeBounds.min, sizeBounds.max);
+              if (nextHeight <= collapsedSize) {
+                  Panel.setDockCollapsed(dock, true);
+                  return;
+              }
+              if (dock.collapsed) {
+                  Panel.setDockCollapsed(dock, false);
+              }
+              dock.size.height = Panel.clamp(
+                  dock.resizeState.startedCollapsed
+                      ? Math.max(sizeBounds.min, nextHeight)
+                      : nextHeight,
+                  sizeBounds.min,
+                  sizeBounds.max,
+              );
           }
   
           Panel.updateAllDockLayouts();
@@ -16317,7 +16775,7 @@
               dock.element.style.height = `${dock.collapsed ? Panel.getDockCollapsedSize(dock.side) : dock.size.height}px`;
           }
   
-          dock.resizeHandle.style.display = dock.collapsed || !visiblePanels.length ? 'none' : '';
+          dock.resizeHandle.style.display = visiblePanels.length ? '' : 'none';
           dock.tabStrip.style.display = visiblePanels.length ? '' : 'none';
   
           Panel.renderDock(dock);
@@ -17547,13 +18005,6 @@
     }
   
     handleInputKeydown(event) {
-      if (event.key === 'Enter' && this.suggestions.length) {
-        if (this.acceptSelectedSuggestion({ executeIfReady: true }) === true) {
-          event.preventDefault();
-        }
-        return;
-      }
-  
       if (event.key === 'Tab') {
         if (this.acceptSelectedSuggestion() === true) {
           event.preventDefault();
@@ -17827,6 +18278,7 @@
           this.modelListenerKeys = new Map();
           this.elementListenerKeys = new Map();
           this.collapsedTreeModels = new Set();
+          this.initializedCollapsedTreeModels = new Set();
   
           this.panel = new Panel(x, y, panelHelper, {
               title: 'Navigator',
@@ -17876,12 +18328,22 @@
               this.applyFilter(event.target.value);
           });
   
+          this.metaRow = this.panelHelper.createElement('div', 'dp-workspace-tree-meta-row');
           this.metaElement = this.panelHelper.createElement('div', 'dp-workspace-tree-meta');
+          this.collapseAllButton = this.panelHelper.makeButton('secondary', 'Collapse all', () => {
+              this.collapseAllTreeGroups();
+          });
+          this.collapseAllButton.classList.add('dp-workspace-tree-meta-action');
+          this.collapseAllButton.type = 'button';
+          this.collapseAllButton.title = 'Collapse all navigator groups';
+          this.collapseAllButton.setAttribute('aria-label', 'Collapse all navigator groups');
           this.treeList = this.panelHelper.createElement('div', 'dp-workspace-tree-scroll');
           this.emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
   
+          this.metaRow.appendChild(this.metaElement);
+          this.metaRow.appendChild(this.collapseAllButton);
           card.body.appendChild(this.filterInput.element);
-          card.body.appendChild(this.metaElement);
+          card.body.appendChild(this.metaRow);
           card.body.appendChild(this.treeList);
           shell.appendChild(card.element);
           this.root.appendChild(shell);
@@ -17959,6 +18421,33 @@
           const nextCollapsed = !this.isModelTreeCollapsed(model);
           this.setModelTreeCollapsed(model, nextCollapsed);
           return nextCollapsed;
+      }
+  
+      isModelTreeExpandable(model) {
+          if (model instanceof Container) {
+              return this.getModelChildren(model).length > 0;
+          }
+          if (model instanceof Component) {
+              return this.getComponentElements(model).length > 0;
+          }
+          return false;
+      }
+  
+      collapseAllTreeGroups() {
+          this.getWorkspaceModels().forEach((model) => {
+              const key = this.getModelTreeKey(model);
+              if (!key) return;
+  
+              if (!this.isModelTreeExpandable(model)) {
+                  this.initializedCollapsedTreeModels.delete(key);
+                  this.collapsedTreeModels.delete(key);
+                  return;
+              }
+  
+              this.initializedCollapsedTreeModels.add(key);
+              this.collapsedTreeModels.add(key);
+          });
+          this.renderTree();
       }
   
       getModelKindText(model) {
@@ -18268,8 +18757,10 @@
           const tokens = this.buildSearchTokens(this.filterQuery);
           const treeEntries = this.buildTreeEntries(this.getTopLevelModels(), tokens);
           const selectedModels = new Set(this.workspace.getSelectedItems());
+          const hasExpandableGroups = this.getWorkspaceModels().some((model) => this.isModelTreeExpandable(model));
   
           this.metaElement.innerText = this.getTreeMetaText(treeEntries, tokens);
+          this.collapseAllButton.disabled = hasExpandableGroups !== true;
           this.treeList.replaceChildren();
   
           if (!treeEntries.length) {
@@ -18299,6 +18790,11 @@
                   this.collapsedTreeModels.delete(key);
               }
           });
+          Array.from(this.initializedCollapsedTreeModels).forEach((key) => {
+              if (!activeKeys.has(key)) {
+                  this.initializedCollapsedTreeModels.delete(key);
+              }
+          });
   
           Array.from(this.modelListenerKeys.entries()).forEach(([model, listenerKey]) => {
               if (activeModels.has(model)) return;
@@ -18313,6 +18809,17 @@
           });
   
           activeModels.forEach((model) => {
+              const key = this.getModelTreeKey(model);
+              const isExpandable = this.isModelTreeExpandable(model);
+              if (key) {
+                  if (!isExpandable) {
+                      this.collapsedTreeModels.delete(key);
+                      this.initializedCollapsedTreeModels.delete(key);
+                  } else if (!this.initializedCollapsedTreeModels.has(key)) {
+                      this.initializedCollapsedTreeModels.add(key);
+                      this.collapsedTreeModels.add(key);
+                  }
+              }
               this.attachModelListener(model);
           });
           activeElements.forEach((element) => {
@@ -18525,6 +19032,7 @@
               dockIconText: ButtonSymbols.persistence,
               persistenceId: 'project:persistence',
               width: detailPanelWidth,
+              height: 560,
               hidden: true,
               resizable: true,
           });
@@ -18781,12 +19289,12 @@
   
       buildPersistencePanel() {
           const persistencePanelItem = this.persistencePanel.addPanelItem('persistence');
-          const shell = this.panelHelper.createElement('div', 'dp-stack');
+          const shell = this.panelHelper.createElement('div', 'dp-stack dp-fill-shell');
           const persistenceCard = this.panelHelper.createSectionCard('Project Data');
           persistenceCard.body.classList.add('dp-section-body-spaced');
           const persistenceActions = this.panelHelper.createElement('div', 'dp-inline-actions');
   
-          this.btnSave = this.panelHelper.makeButton('success', 'Save', async () => {
+          this.btnSave = this.panelHelper.makeButton('secondary', 'Save', async () => {
               try {
                   const serialized = await this.persistence.saveToClipboard();
                   this.loadTextarea.value = serialized;
@@ -18829,7 +19337,31 @@
           persistenceCard.body.appendChild(this.persistenceStatusElement);
           shell.appendChild(persistenceCard.element);
   
+          const browserCacheCard = this.panelHelper.createSectionCard('Saved In Browser');
+          browserCacheCard.element.classList.add('dp-fill-card');
+          browserCacheCard.body.classList.add('dp-section-body-spaced', 'dp-fill-body');
+          const browserCacheActions = this.panelHelper.createElement('div', 'dp-inline-actions');
+  
+          this.btnSaveToBrowser = this.panelHelper.makeButton('secondary', 'Save Current Project', () => {
+              try {
+                  const savedProject = this.persistence.saveToBrowserCache();
+                  this.loadTextarea.value = this.persistence.serialize();
+                  this.renderBrowserCacheProjectList();
+                  this.setStatus(`Saved "${savedProject.name}" to this browser.`);
+              } catch (error) {
+                  console.error('Failed to save project to browser storage.', error);
+                  this.setStatus(error.message || 'Browser save failed.');
+              }
+          });
+          browserCacheActions.appendChild(this.btnSaveToBrowser);
+          browserCacheCard.body.appendChild(browserCacheActions);
+  
+          this.browserCacheProjectList = this.panelHelper.createElement('div', 'dp-control-manager-list dp-persistence-project-list dp-fill-scroll');
+          browserCacheCard.body.appendChild(this.browserCacheProjectList);
+          shell.appendChild(browserCacheCard.element);
+  
           persistencePanelItem.appendChild(shell);
+          this.renderBrowserCacheProjectList();
       }
   
       buildHelpPanel() {
@@ -18928,7 +19460,7 @@
               },
               {
                   title: 'Project Data',
-                  description: 'Save the current project to the clipboard, download it as JSON, or load pasted JSON back into the project.',
+                  description: 'Save the current project to this browser or the clipboard, download it as JSON, or load pasted JSON back into the project.',
               },
               {
                   title: 'File drop loading',
@@ -18976,11 +19508,12 @@
               { command: 'cp <item name>', description: 'Copy an item without its connections to the current workspace.' },
               { command: 'cp <item name> <container name>', description: 'Copy an item without its connections into a container in the current workspace.' },
               { command: 'cp <item name> <workspace name> [container name]', description: 'Copy an item without its connections into another workspace, optionally inside one of its containers.' },
+              { command: 'mv <item name> <container name>', description: 'Move an item into a container in the current workspace.' },
+              { command: 'mv <item name> <workspace name> [container name]', description: 'Move an item into another workspace, optionally inside one of its containers.' },
               { command: 'ren <item name> <new name>', description: 'Rename an item or component element.' },
               { command: 'del <item name>', description: 'Delete an item or component element.' },
               { command: 'conn <component.element> <component.element>', description: 'Create a connection between matching endpoints.' },
               { command: 'delconn <component.element> <component.element>', description: 'Delete a connection between endpoints.' },
-              { command: 'mv <item name> <container name>', description: 'Move an item into a container.' },
               { command: 'workspace <name>', description: 'Create a new workspace and switch to it.' },
               { command: 'undo / redo', description: 'Undo or redo the last workspace action.' },
               { command: 'start / pause / stop / restart', description: 'Control workspace execution from the command line.' },
@@ -20094,8 +20627,12 @@
           }
           this.btnCaptureSelection.disabled = isRunning || !this.projectController.getLibraryCaptureCandidate();
           this.loadTextarea.disabled = isRunning;
+          if (this.btnSaveToBrowser) {
+              this.btnSaveToBrowser.disabled = isRunning || this.persistence?.isBrowserCacheAvailable?.() === false;
+          }
   
           this.renderLibraryList();
+          this.renderBrowserCacheProjectList();
       }
   
       syncToolbarState() {
@@ -20164,6 +20701,7 @@
           this.syncWorkspaceSelectors();
           this.syncWorkspacePanelUi(activeWorkspace);
           this.syncLibraryUi();
+          this.renderBrowserCacheProjectList();
           this.syncRunState();
           this.syncToolbarState();
       }
@@ -20272,6 +20810,89 @@
           });
       }
   
+      renderBrowserCacheProjectList() {
+          if (!this.browserCacheProjectList) return;
+  
+          const isRunning = this.workspace?.getRunState?.() === ExecutionEnvironment.runStateRunning;
+          const browserCacheAvailable = this.persistence?.isBrowserCacheAvailable?.() !== false;
+          const savedProjects = this.persistence?.getBrowserCacheProjectSummaries?.() ?? [];
+          this.browserCacheProjectList.replaceChildren();
+  
+          if (!browserCacheAvailable) {
+              const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
+              emptyState.innerText = 'Browser storage is unavailable in this session.';
+              this.browserCacheProjectList.appendChild(emptyState);
+              return;
+          }
+  
+          if (!savedProjects.length) {
+              const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
+              emptyState.innerText = 'Projects saved in this browser will appear here.';
+              this.browserCacheProjectList.appendChild(emptyState);
+              return;
+          }
+  
+          savedProjects.forEach((projectSummary) => {
+              const row = this.panelHelper.createElement('div', 'dp-control-manager-row');
+              const details = this.panelHelper.createElement('div', 'dp-control-manager-details');
+              const title = this.panelHelper.createElement('div', 'dp-control-manager-title');
+              const meta = this.panelHelper.createElement('div', 'dp-control-manager-meta');
+              const actions = this.panelHelper.createElement('div', 'dp-control-manager-actions');
+              const savedAtLabel = this.formatBrowserCacheTimestamp(projectSummary.savedAt);
+              const workspaceCount = Number.isInteger(projectSummary.workspaceCount)
+                  ? projectSummary.workspaceCount
+                  : 0;
+  
+              const loadButton = this.makePersistenceRecordActionButton('Load', 'Load this saved project', () => {
+                  try {
+                      const loadedProject = this.persistence.loadFromBrowserCache(projectSummary.id);
+                      this.loadTextarea.value = this.persistence.serialize();
+                      this.setStatus(`Loaded "${loadedProject.name}" from this browser.`);
+                  } catch (error) {
+                      console.error('Failed to load saved browser project.', error);
+                      this.setStatus(error.message || 'Browser project load failed.');
+                  }
+              });
+              loadButton.disabled = isRunning;
+  
+              const downloadButton = this.makePersistenceRecordActionButton('Download', 'Download this saved project as JSON', () => {
+                  try {
+                      const downloadedProject = this.persistence.downloadBrowserCacheProject(projectSummary.id);
+                      this.setStatus(`Downloaded "${downloadedProject.name}" from browser storage.`);
+                  } catch (error) {
+                      console.error('Failed to download saved browser project.', error);
+                      this.setStatus(error.message || 'Saved project download failed.');
+                  }
+              });
+              downloadButton.disabled = isRunning;
+  
+              const deleteButton = this.makePersistenceRecordActionButton('Delete', 'Delete this saved project from browser storage', () => {
+                  try {
+                      const deletedProject = this.persistence.deleteBrowserCacheProject(projectSummary.id);
+                      this.renderBrowserCacheProjectList();
+                      this.setStatus(`Deleted "${deletedProject.name}" from this browser.`);
+                  } catch (error) {
+                      console.error('Failed to delete saved browser project.', error);
+                      this.setStatus(error.message || 'Saved project deletion failed.');
+                  }
+              });
+              deleteButton.disabled = isRunning;
+  
+              title.innerText = projectSummary.name;
+              meta.innerText = `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}`
+                  + (savedAtLabel ? ` • Saved ${savedAtLabel}` : '');
+  
+              details.appendChild(title);
+              details.appendChild(meta);
+              actions.appendChild(loadButton);
+              actions.appendChild(downloadButton);
+              actions.appendChild(deleteButton);
+              row.appendChild(details);
+              row.appendChild(actions);
+              this.browserCacheProjectList.appendChild(row);
+          });
+      }
+  
       makeLibraryActionButton(iconText, tooltip, onClick, style = 'light') {
           const button = this.panelHelper.makeButton(style, iconText, onClick);
           button.classList.add('dp-toolbar-btn', 'dp-control-manager-btn');
@@ -20279,6 +20900,20 @@
           button.setAttribute('aria-label', tooltip);
           button.type = 'button';
           return button;
+      }
+  
+      makePersistenceRecordActionButton(label, tooltip, onClick, style = 'secondary') {
+          const button = this.panelHelper.makeButton(style, label, onClick);
+          button.title = tooltip;
+          button.setAttribute('aria-label', tooltip);
+          button.type = 'button';
+          return button;
+      }
+  
+      formatBrowserCacheTimestamp(timestamp) {
+          const dateValue = new Date(timestamp ?? '');
+          if (Number.isNaN(dateValue.getTime())) return '';
+          return dateValue.toLocaleString();
       }
   
       resetToolbarButtonState(button) {
@@ -20317,6 +20952,8 @@
           this.mode = ComponentPanel.modeDesign;
           this.liveRefreshers = [];
           this.refreshIntervalId = null;
+          this.collapsedSectionKeys = new Set();
+          this.inspectorSearchQuery = '';
           this.panel = new Panel(x, y, panelHelper, {
               title: 'Inspector',
               eyebrow: 'Selection',
@@ -20421,6 +21058,9 @@
   
       renderSelection(item) {
           this.resetLiveRefreshers();
+          if (item !== this.selectedComponent) {
+              this.inspectorSearchQuery = '';
+          }
           if (item instanceof Component) {
               this.SetComponent(item);
               return;
@@ -20479,6 +21119,152 @@
           inspectorCard.body.classList.add('dp-fill-body');
           const inspectorSections = this.panelHelper.createElement('div', 'dp-scroll-section');
           return { content, inspectorCard, inspectorSections };
+      }
+  
+      normalizeInspectorSearchQuery(query) {
+          return String(query ?? '').trim().toLowerCase();
+      }
+  
+      collectInspectorSearchText(element) {
+          if (!(element instanceof Element)) return '';
+          const textParts = [];
+          const appendText = (value) => {
+              const normalizedValue = String(value ?? '').trim();
+              if (normalizedValue) {
+                  textParts.push(normalizedValue.toLowerCase());
+              }
+          };
+          const appendElementText = (node) => {
+              if (!(node instanceof Element)) return;
+              appendText(node.getAttribute('aria-label'));
+              appendText(node.getAttribute('title'));
+              if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+                  appendText(node.value);
+              } else if (node instanceof HTMLSelectElement) {
+                  appendText(node.value);
+                  appendText(node.selectedOptions?.[0]?.textContent);
+              } else if (node instanceof HTMLButtonElement) {
+                  appendText(node.innerText);
+              }
+              appendText(node.textContent);
+          };
+  
+          appendElementText(element);
+          element.querySelectorAll('input, textarea, select, button, [aria-label], [title]').forEach((node) => {
+              appendElementText(node);
+          });
+          return textParts.join(' ');
+      }
+  
+      getInspectorSectionSearchItems(sectionContent) {
+          if (!(sectionContent instanceof HTMLElement)) return [];
+          const items = [];
+          Array.from(sectionContent.children).forEach((child) => {
+              if (!(child instanceof HTMLElement)) return;
+              if (child.classList.contains('dp-inspector-search-empty-state')) return;
+              if (child.classList.contains('dp-inspector-compact-list')) {
+                  items.push(...Array.from(child.children).filter((item) => item instanceof HTMLElement));
+                  return;
+              }
+              items.push(child);
+          });
+          return items;
+      }
+  
+      setInspectorSearchVisibility(element, isVisible) {
+          if (!(element instanceof HTMLElement)) return;
+          element.style.display = isVisible ? '' : 'none';
+      }
+  
+      syncInspectorSectionState(section, title, isExpanded, isSearchActive = false) {
+          if (!(section instanceof HTMLElement)) return;
+          const content = Array.from(section.children).find((element) => (
+              element instanceof HTMLElement
+              && element.classList.contains('dp-inspector-section-content')
+          ));
+          const toggle = section.querySelector('.dp-inspector-section-toggle');
+  
+          section.classList.toggle('is-collapsed', isExpanded !== true);
+          if (content instanceof HTMLElement) {
+              content.hidden = isExpanded !== true;
+          }
+          if (!(toggle instanceof HTMLButtonElement)) return;
+  
+          toggle.classList.toggle('is-expanded', isExpanded === true);
+          toggle.setAttribute('aria-expanded', isExpanded === true ? 'true' : 'false');
+          toggle.setAttribute('aria-label', `${isExpanded === true ? 'Collapse' : 'Expand'} ${title}`);
+          toggle.title = isSearchActive
+              ? `Clear search to toggle ${title}`
+              : `${isExpanded === true ? 'Collapse' : 'Expand'} ${title}`;
+          toggle.disabled = isSearchActive;
+      }
+  
+      applyInspectorSearch(inspectorSections, emptyState = null) {
+          if (!(inspectorSections instanceof HTMLElement)) return;
+          const query = this.normalizeInspectorSearchQuery(this.inspectorSearchQuery);
+          const sections = Array.from(inspectorSections.children).filter((element) => (
+              element instanceof HTMLElement
+              && element.classList.contains('dp-inspector-section')
+          ));
+          let visibleSectionCount = 0;
+  
+          sections.forEach((section) => {
+              const title = section.querySelector('.dp-section-title')?.textContent?.trim() ?? '';
+              const content = section.querySelector('.dp-inspector-section-content');
+              const items = this.getInspectorSectionSearchItems(content);
+              const titleMatches = query ? this.normalizeInspectorSearchQuery(title).includes(query) : false;
+              let sectionHasMatch = query === '';
+  
+              if (!query || titleMatches) {
+                  items.forEach((item) => {
+                      this.setInspectorSearchVisibility(item, true);
+                  });
+                  sectionHasMatch = true;
+              } else if (items.length > 0) {
+                  let visibleItems = 0;
+                  items.forEach((item) => {
+                      const matches = this.collectInspectorSearchText(item).includes(query);
+                      this.setInspectorSearchVisibility(item, matches);
+                      if (matches) visibleItems += 1;
+                  });
+                  sectionHasMatch = visibleItems > 0;
+              } else if (content instanceof HTMLElement) {
+                  sectionHasMatch = this.collectInspectorSearchText(content).includes(query);
+              }
+  
+              this.setInspectorSearchVisibility(section, sectionHasMatch);
+              if (sectionHasMatch) {
+                  visibleSectionCount += 1;
+              }
+              this.syncInspectorSectionState(
+                  section,
+                  title,
+                  query ? sectionHasMatch : this.isInspectorSectionCollapsed(this.selectedComponent, title) !== true,
+                  query.length > 0,
+              );
+          });
+  
+          if (emptyState instanceof HTMLElement) {
+              emptyState.hidden = !(query && visibleSectionCount === 0);
+          }
+      }
+  
+      createComponentInspectorSearchShell(inspectorSections, emptyState) {
+          const searchShell = this.panelHelper.createElement('div', 'dp-inspector-search-shell');
+          const searchInput = this.panelHelper.createElement('input', 'dp-input dp-inspector-search-input');
+          searchInput.type = 'search';
+          searchInput.value = this.inspectorSearchQuery;
+          searchInput.autocomplete = 'off';
+          searchInput.spellcheck = false;
+          searchInput.placeholder = 'Search channels, properties, triggers, timers';
+          searchInput.setAttribute('aria-label', 'Search inspector contents');
+          searchInput.setAttribute('enterkeyhint', 'search');
+          searchInput.addEventListener('input', () => {
+              this.inspectorSearchQuery = searchInput.value;
+              this.applyInspectorSearch(inspectorSections, emptyState);
+          });
+          searchShell.appendChild(searchInput);
+          return searchShell;
       }
   
       createInspectorSelectField(labelText, className, options, initialValue, onChange) {
@@ -20617,8 +21403,14 @@
           this.AppendSection(component.getTimers().length, 'Timers', inspectorSections, (body) => {
               this.AddTimers(component, body);
           });
+          const searchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state dp-inspector-search-empty-state');
+          searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
+          searchEmptyState.hidden = true;
+          inspectorSections.appendChild(searchEmptyState);
+          componentContent.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
           inspectorCard.body.appendChild(inspectorSections);
           componentContent.appendChild(inspectorCard.element);
+          this.applyInspectorSearch(inspectorSections, searchEmptyState);
           return componentContent;
       }
   
@@ -20657,8 +21449,14 @@
               inspectorSections.appendChild(emptyState);
           }
   
+          const searchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state dp-inspector-search-empty-state');
+          searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
+          searchEmptyState.hidden = true;
+          inspectorSections.appendChild(searchEmptyState);
+          componentContent.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
           inspectorCard.body.appendChild(inspectorSections);
           componentContent.appendChild(inspectorCard.element);
+          this.applyInspectorSearch(inspectorSections, searchEmptyState);
           return componentContent;
       }
   
@@ -20797,15 +21595,77 @@
           this.detachSelectionListeners();
           this.resetLiveRefreshers();
           this.selectedComponent = null;
+          this.inspectorSearchQuery = '';
           this.syncModeButton();
           this.renderEmptyState();
+      }
+  
+      getInspectorSectionKey(item, title) {
+          const itemId = item?.id;
+          const itemType = item?.constructor?.name;
+          const normalizedTitle = String(title ?? '').trim();
+          if (!itemType || !normalizedTitle) return null;
+          if (!Number.isInteger(itemId) && typeof itemId !== 'string') return null;
+          return `${itemType}:${String(itemId)}:${normalizedTitle}`;
+      }
+  
+      isInspectorSectionCollapsed(item, title) {
+          const key = this.getInspectorSectionKey(item, title);
+          return key ? this.collapsedSectionKeys.has(key) : false;
+      }
+  
+      setInspectorSectionCollapsed(item, title, value) {
+          const key = this.getInspectorSectionKey(item, title);
+          if (!key) return false;
+          if (value === true) {
+              this.collapsedSectionKeys.add(key);
+          } else {
+              this.collapsedSectionKeys.delete(key);
+          }
+          return true;
+      }
+  
+      toggleInspectorSectionCollapsed(item, title) {
+          const nextCollapsed = !this.isInspectorSectionCollapsed(item, title);
+          this.setInspectorSectionCollapsed(item, title, nextCollapsed);
+          return nextCollapsed;
       }
   
       AppendSection(count, title, parentElement, renderFunc) {
           if (!count) return;
           const section = this.panelHelper.createElement('div', 'dp-inspector-section');
-          section.appendChild(this.panelHelper.createSectionTitle(title));
-          renderFunc(section);
+          const header = this.panelHelper.createElement('div', 'dp-inspector-section-header');
+          const toggle = this.panelHelper.createElement('button', 'dp-inspector-section-toggle');
+          const sectionTitle = this.panelHelper.createSectionTitle(title);
+          const content = this.panelHelper.createElement('div', 'dp-inspector-section-content');
+          const isExpanded = this.isInspectorSectionCollapsed(this.selectedComponent, title) !== true;
+  
+          toggle.type = 'button';
+          toggle.innerText = '›';
+          toggle.classList.toggle('is-expanded', isExpanded);
+          toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+          toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} ${title}`);
+          toggle.title = `${isExpanded ? 'Collapse' : 'Expand'} ${title}`;
+          toggle.addEventListener('click', (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const nextCollapsed = this.toggleInspectorSectionCollapsed(this.selectedComponent, title);
+              const nextExpanded = nextCollapsed !== true;
+              section.classList.toggle('is-collapsed', nextCollapsed);
+              content.hidden = nextCollapsed;
+              toggle.classList.toggle('is-expanded', nextExpanded);
+              toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+              toggle.setAttribute('aria-label', `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`);
+              toggle.title = `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`;
+          });
+  
+          section.classList.toggle('is-collapsed', !isExpanded);
+          content.hidden = !isExpanded;
+          header.appendChild(toggle);
+          header.appendChild(sectionTitle);
+          section.appendChild(header);
+          renderFunc(content);
+          section.appendChild(content);
           parentElement.appendChild(section);
       }
   
@@ -21372,9 +22232,9 @@
   
       createPropertyDesignConfigEditor(property) {
           const displayConfig = property.getDisplayConfig?.() ?? Property.createDefaultDisplayConfig();
+          const editorShell = this.panelHelper.createElement('div', 'dp-inspector-property-design-shell');
           const editor = this.panelHelper.createElement('div', 'dp-control-design-config dp-inspector-property-config');
-          const representationField = this.panelHelper.createElement('div', 'dp-control-design-field');
-          const representationLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
+          const representationField = this.panelHelper.createElement('div', 'dp-control-design-field dp-inspector-property-representation-field');
           const representationSelect = document.createElement('select');
           const representationOptions = [
               [ControlPanelModel.propertyRepresentationDropdown, 'Selector'],
@@ -21386,8 +22246,8 @@
           if (displayConfig.representation === ControlPanelModel.propertyRepresentationProgress) {
               representationOptions.push([ControlPanelModel.propertyRepresentationProgress, 'Progress']);
           }
-          representationLabel.innerText = 'View';
           representationSelect.className = 'dp-input';
+          representationSelect.setAttribute('aria-label', 'Property view design');
           representationOptions.forEach(([value, label]) => {
               const option = document.createElement('option');
               option.value = value;
@@ -21400,7 +22260,6 @@
                   representation: representationSelect.value,
               });
           });
-          representationField.appendChild(representationLabel);
           representationField.appendChild(representationSelect);
           editor.appendChild(representationField);
   
@@ -21451,7 +22310,8 @@
               });
           }
   
-          return editor;
+          editorShell.appendChild(editor);
+          return editorShell;
       }
   
       FormatEndpoint(componentName, connectableName) {
@@ -26936,11 +27796,28 @@
       margin-bottom: 10px;
     }
 
-    .dp-workspace-tree-meta {
+    .dp-workspace-tree-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
       padding: 0 2px 10px;
+    }
+
+    .dp-workspace-tree-meta {
+      flex: 1 1 auto;
+      min-width: 0;
       font-size: 12px;
       line-height: 1.45;
       color: var(--panel-muted);
+    }
+
+    .dp-workspace-tree-meta-action {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      font-size: 12px;
+      border-radius: 12px;
+      white-space: nowrap;
     }
 
     .dp-workspace-tree-scroll {
@@ -27128,22 +28005,99 @@
       padding-right: 4px;
     }
 
+    .dp-inspector-search-shell {
+      display: flex;
+      flex: 0 0 auto;
+      padding: 0 2px 0 0;
+    }
+
+    .dp-inspector-search-input {
+      flex: 1 1 auto;
+    }
+
     .dp-inspector-section {
       display: flex;
       flex-direction: column;
       gap: 0;
     }
 
-    .dp-inspector-view-sections > .dp-inspector-section {
-      margin-top: 12px;
-      padding-top: 12px;
+    .dp-inspector-section-header {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .dp-inspector-section-header .dp-section-title {
+      margin-top: 0;
+    }
+
+    .dp-inspector-section-toggle {
+      appearance: none;
+      flex: 0 0 18px;
+      width: 18px;
+      min-width: 18px;
+      align-self: center;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--panel-muted);
+      cursor: pointer;
+      box-shadow: none;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      transition: color 120ms ease, transform 120ms ease, background 120ms ease;
+    }
+
+    .dp-inspector-section-toggle:hover:not(:disabled) {
+      color: var(--panel-text);
+      background: var(--panel-light-bg);
+    }
+
+    .dp-inspector-section-toggle:focus-visible {
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+      outline: none;
+    }
+
+    .dp-inspector-section-toggle.is-expanded {
+      transform: rotate(90deg);
+    }
+
+    .dp-inspector-section-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-width: 0;
+    }
+
+    .dp-inspector-section-content[hidden] {
+      display: none;
+    }
+
+    .dp-scroll-section > .dp-inspector-section {
+      margin-top: 14px;
+      padding-top: 14px;
       border-top: 1px solid var(--panel-line);
     }
 
-    .dp-inspector-view-sections > .dp-inspector-section:first-child {
+    .dp-scroll-section > .dp-inspector-section:first-child {
       margin-top: 0;
       padding-top: 0;
       border-top: 0;
+    }
+
+    .dp-inspector-section-content > .dp-form-row {
+      border-bottom: 0;
+    }
+
+    .dp-inspector-section-content > .dp-form-row:first-of-type {
+      padding-top: 0;
+    }
+
+    .dp-inspector-section-content > .dp-form-row:last-of-type {
+      padding-bottom: 0;
     }
 
     .dp-inspector-compact-list {
@@ -27232,6 +28186,10 @@
       gap: 6px;
       padding: 6px 0;
       border-bottom: 0;
+    }
+
+    .dp-inspector-view-sections .dp-inspector-section-content {
+      padding-top: 4px;
     }
 
     .dp-inspector-view-sections .dp-inspector-compact-item:first-child {
@@ -27429,6 +28387,12 @@
       padding-right: 4px;
     }
 
+    .dp-persistence-project-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
+
     .dp-control-entry-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
@@ -27600,9 +28564,8 @@
     .dp-inspector-property-item {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--panel-line);
+      gap: 6px;
+      padding: 8px 0 10px;
     }
 
     .dp-inspector-property-item:first-child {
@@ -27611,7 +28574,6 @@
 
     .dp-inspector-property-item:last-child {
       padding-bottom: 0;
-      border-bottom: 0;
     }
 
     .dp-inspector-property-main-row {
@@ -27619,10 +28581,26 @@
       border-bottom: 0;
     }
 
+    .dp-inspector-property-design-shell {
+      margin-left: 12px;
+      padding-left: 6px;
+    }
+
+    .dp-inspector-property-design-shell .dp-inspector-property-config {
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
     .dp-inspector-property-config {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 8px;
+      gap: 6px;
+    }
+
+    .dp-inspector-property-representation-field {
+      gap: 0;
     }
 
     .dp-inspector-property-config .dp-control-design-field.is-wide {
@@ -28616,6 +29594,11 @@
 
       .dp-inspector-property-config {
         grid-template-columns: 1fr;
+      }
+
+      .dp-inspector-property-design-shell {
+        margin-left: 8px;
+        padding-left: 4px;
       }
     }
 
