@@ -22487,6 +22487,8 @@
           executionGroup.appendChild(this.btnRestartExecution);
   
           const createGroup = this.createToolbarGroup('Create');
+          createGroup.classList.add('dp-topbar-group-create');
+          const createStrip = this.panelHelper.createElement('div', 'dp-toolbar-create-strip');
           this.btnAddComponent = this.makeCreateToolbarButton(
               ButtonSymbols.component,
               'Add component',
@@ -22514,9 +22516,10 @@
                   this.workspace.addNewBlankTextItem();
               },
           );
-          createGroup.appendChild(this.btnAddComponent);
-          createGroup.appendChild(this.btnAddContainer);
-          createGroup.appendChild(this.btnAddTextItem);
+          createStrip.appendChild(this.btnAddComponent);
+          createStrip.appendChild(this.btnAddContainer);
+          createStrip.appendChild(this.btnAddTextItem);
+          createGroup.appendChild(createStrip);
   
           const windowGroup = this.createToolbarGroup('Windows');
           this.btnCodePanel = this.makeToolbarButton(ButtonSymbols.code, 'Open code window', () => {
@@ -22582,7 +22585,6 @@
           const dragTooltip = `${tooltip} or drag to canvas`;
           const icon = this.panelHelper.createElement('span', 'dp-toolbar-btn-icon');
           const text = this.panelHelper.createElement('span', 'dp-toolbar-btn-text');
-          const cue = this.panelHelper.createElement('span', 'dp-toolbar-btn-cue');
           const grip = this.panelHelper.createElement('span', 'dp-toolbar-btn-grip');
   
           button.classList.add('dp-toolbar-btn-create');
@@ -22594,13 +22596,11 @@
           icon.innerText = iconText;
           icon.setAttribute('aria-hidden', 'true');
           text.innerText = labelText;
-          cue.innerText = 'Drag to canvas';
           grip.setAttribute('aria-hidden', 'true');
-          grip.innerText = '⋮⋮';
+          grip.innerText = '⋮';
   
           button.appendChild(icon);
           button.appendChild(text);
-          button.appendChild(cue);
           button.appendChild(grip);
   
           button.addEventListener('dragstart', (event) => {
@@ -23529,18 +23529,36 @@
       handleCreateToolbarDrop(dragData, positionOffset = null) {
           if (!dragData?.type) return null;
           this.konvaWorkspace?.setNextSpawnPosition?.(positionOffset);
+          let createdItem = null;
   
           switch (dragData.type) {
               case 'component':
-                  return this.workspace.addNewBlankComponent();
+                  createdItem = this.workspace.addNewBlankComponent();
+                  break;
               case 'container':
-                  return this.workspace.addNewBlankContainer();
+                  createdItem = this.workspace.addNewBlankContainer();
+                  break;
               case 'text':
-                  return this.workspace.addNewBlankTextItem();
+                  createdItem = this.workspace.addNewBlankTextItem();
+                  break;
               default:
                   this.konvaWorkspace?.setNextSpawnPosition?.(null);
                   return null;
           }
+  
+          if (createdItem && positionOffset) {
+              const bounds = this.konvaWorkspace?.getModelBounds?.(createdItem);
+              const width = Number(bounds?.width);
+              const height = Number(bounds?.height);
+              if (Number.isFinite(width) && Number.isFinite(height)) {
+                  this.konvaWorkspace?.setModelPosition?.(createdItem, {
+                      x: positionOffset.x - (width / 2),
+                      y: positionOffset.y - (height / 2),
+                  });
+              }
+          }
+  
+          return createdItem;
       }
   
       handleCopyLibraryItemToLibrary(dragData, targetLibraryId) {
@@ -30765,37 +30783,37 @@
     body[data-dp-theme="dark"] {
       color-scheme: dark;
       --page-bg:
-        radial-gradient(circle at top left, rgba(45, 212, 191, 0.12), transparent 28%),
-        linear-gradient(140deg, #050b15 0%, #0f172a 48%, #111827 100%);
-      --panel-bg: rgba(15, 23, 42, 0.88);
+        radial-gradient(circle at top left, rgba(45, 212, 191, 0.1), transparent 26%),
+        linear-gradient(140deg, #030712 0%, #0b1220 48%, #0f172a 100%);
+      --panel-bg: rgba(10, 15, 28, 0.92);
       --panel-border: rgba(148, 163, 184, 0.18);
-      --panel-shadow: 0 28px 80px rgba(2, 6, 23, 0.46);
+      --panel-shadow: 0 28px 80px rgba(1, 4, 16, 0.56);
       --panel-text: #e2e8f0;
       --panel-muted: #94a3b8;
       --panel-accent: #5eead4;
       --panel-accent-soft: rgba(94, 234, 212, 0.16);
       --panel-warm: #fbbf24;
       --panel-line: rgba(148, 163, 184, 0.18);
-      --panel-input: rgba(15, 23, 42, 0.72);
+      --panel-input: rgba(9, 14, 26, 0.78);
       --panel-input-border: rgba(148, 163, 184, 0.18);
       --panel-input-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-      --panel-control-bg: rgba(255, 255, 255, 0.06);
+      --panel-control-bg: rgba(255, 255, 255, 0.05);
       --panel-control-border: rgba(148, 163, 184, 0.18);
       --panel-control-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
       --panel-hover-shadow: 0 10px 18px rgba(2, 6, 23, 0.25);
-      --topbar-bg: rgba(15, 23, 42, 0.82);
-      --workspace-panel-bg: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(17, 24, 39, 0.92));
-      --inspector-panel-bg: linear-gradient(180deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.92));
-      --code-panel-bg: linear-gradient(180deg, rgba(11, 18, 32, 0.96), rgba(15, 23, 42, 0.92));
-      --logger-panel-bg: linear-gradient(180deg, rgba(9, 15, 23, 0.96), rgba(17, 24, 39, 0.92));
-      --control-panel-bg: linear-gradient(180deg, rgba(24, 24, 27, 0.95), rgba(31, 41, 55, 0.92));
-      --panel-active-bg: linear-gradient(180deg, rgba(45, 212, 191, 0.22), rgba(15, 23, 42, 0.98));
+      --topbar-bg: rgba(9, 14, 26, 0.88);
+      --workspace-panel-bg: linear-gradient(180deg, rgba(9, 14, 26, 0.97), rgba(11, 18, 32, 0.94));
+      --inspector-panel-bg: linear-gradient(180deg, rgba(17, 24, 39, 0.97), rgba(11, 18, 32, 0.94));
+      --code-panel-bg: linear-gradient(180deg, rgba(6, 10, 18, 0.98), rgba(9, 14, 26, 0.94));
+      --logger-panel-bg: linear-gradient(180deg, rgba(4, 8, 15, 0.98), rgba(11, 18, 32, 0.94));
+      --control-panel-bg: linear-gradient(180deg, rgba(15, 15, 18, 0.97), rgba(17, 24, 39, 0.94));
+      --panel-active-bg: linear-gradient(180deg, rgba(45, 212, 191, 0.18), rgba(9, 14, 26, 0.99));
       --panel-active-border: rgba(94, 234, 212, 0.24);
       --panel-active-text: #ccfbf1;
       --panel-light-bg: rgba(255, 255, 255, 0.04);
       --panel-secondary-bg: rgba(255, 255, 255, 0.08);
       --panel-secondary-border: rgba(148, 163, 184, 0.2);
-      --panel-section-bg: rgba(15, 23, 42, 0.42);
+      --panel-section-bg: rgba(9, 14, 26, 0.5);
       --panel-section-border: rgba(148, 163, 184, 0.14);
       --panel-section-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
       --panel-nav-bg: transparent;
@@ -30806,14 +30824,14 @@
       --panel-nav-active-border: transparent;
       --panel-nav-active-text: #ccfbf1;
       --panel-nav-indicator: linear-gradient(90deg, #5eead4 0%, #2dd4bf 100%);
-      --panel-card-bg: rgba(15, 23, 42, 0.58);
+      --panel-card-bg: rgba(9, 14, 26, 0.64);
       --panel-card-border: rgba(148, 163, 184, 0.16);
       --panel-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-      --panel-strong-bg: rgba(2, 6, 23, 0.52);
+      --panel-strong-bg: rgba(2, 6, 23, 0.64);
       --panel-strong-border: rgba(148, 163, 184, 0.18);
       --panel-strong-text: #e2e8f0;
       --panel-strong-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-      --panel-log-window-bg: rgba(2, 6, 23, 0.44);
+      --panel-log-window-bg: rgba(2, 6, 23, 0.54);
       --panel-log-line-bg: rgba(255, 255, 255, 0.04);
       --panel-log-line-border: rgba(148, 163, 184, 0.18);
       --panel-chip-bg: rgba(94, 234, 212, 0.14);
@@ -30823,13 +30841,13 @@
       --panel-toggle-thumb-bg: rgba(248, 250, 252, 0.96);
       --panel-progress-track-bg: rgba(148, 163, 184, 0.14);
       --panel-progress-fill-bg: linear-gradient(90deg, #2dd4bf 0%, #5eead4 100%);
-      --panel-load-focus-bg: rgba(15, 23, 42, 0.84);
+      --panel-load-focus-bg: rgba(9, 14, 26, 0.9);
       --panel-code-entry-bg: rgba(255, 255, 255, 0.05);
       --panel-code-entry-border: rgba(148, 163, 184, 0.16);
       --panel-code-entry-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
       --panel-code-entry-active-bg: linear-gradient(180deg, rgba(37, 99, 235, 0.22), rgba(15, 23, 42, 0.96));
       --panel-code-entry-active-border: rgba(96, 165, 250, 0.26);
-      --panel-code-editor-bg: rgba(2, 6, 23, 0.6);
+      --panel-code-editor-bg: rgba(2, 6, 23, 0.72);
       --panel-code-editor-border: rgba(148, 163, 184, 0.18);
       --panel-code-editor-text: #e2e8f0;
       --panel-code-editor-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -30845,10 +30863,10 @@
       --panel-code-token-punctuation: #e2e8f0;
       --panel-code-token-context: #5eead4;
       --panel-commandline-bg:
-        radial-gradient(circle at top left, rgba(45, 212, 191, 0.12), transparent 30%),
-        linear-gradient(180deg, rgba(9, 15, 23, 0.96), rgba(15, 23, 42, 0.94));
+        radial-gradient(circle at top left, rgba(45, 212, 191, 0.1), transparent 28%),
+        linear-gradient(180deg, rgba(5, 9, 16, 0.98), rgba(9, 14, 26, 0.96));
       --panel-commandline-border: rgba(148, 163, 184, 0.18);
-      --panel-commandline-shadow: 0 24px 70px rgba(2, 6, 23, 0.38);
+      --panel-commandline-shadow: 0 24px 70px rgba(1, 4, 16, 0.48);
       --panel-commandline-text: #e2e8f0;
       --panel-commandline-eyebrow: #5eead4;
       --panel-commandline-title: #f8fafc;
@@ -31398,9 +31416,24 @@
       flex: 0 0 auto;
     }
 
+    .dp-topbar-group-create {
+      gap: 0;
+    }
+
     .dp-topbar-group + .dp-topbar-group {
       padding-left: 14px;
       border-left: 1px solid var(--panel-line);
+    }
+
+    .dp-toolbar-create-strip {
+      display: inline-flex;
+      align-items: stretch;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--panel-control-border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.56);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
     }
 
     .dp-topbar-select {
@@ -31715,24 +31748,25 @@
 
     .dp-toolbar-btn-create {
       position: relative;
-      min-width: 122px;
-      min-height: 58px;
-      padding: 10px 34px 10px 12px;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      grid-template-rows: auto auto;
-      column-gap: 10px;
-      row-gap: 2px;
+      min-width: 0;
+      min-height: 44px;
+      padding: 0 28px 0 12px;
+      display: inline-flex;
       align-items: center;
-      justify-items: start;
+      gap: 8px;
+      justify-content: flex-start;
       text-align: left;
       cursor: grab;
-      border-style: dashed;
-      border-width: 1.5px;
+      border-style: solid;
+      border-width: 1px;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
     }
 
     .dp-toolbar-btn-create:hover {
-      box-shadow: var(--panel-hover-shadow);
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
       transform: translateY(-1px);
     }
 
@@ -31743,51 +31777,40 @@
 
     .dp-toolbar-btn-create.is-dragging {
       opacity: 0.78;
-      box-shadow: var(--panel-hover-shadow);
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
     }
 
     .dp-toolbar-btn-icon {
-      grid-column: 1;
-      grid-row: 1 / span 2;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 26px;
-      height: 26px;
-      font-size: 18px;
+      width: 20px;
+      height: 20px;
+      font-size: 16px;
       color: var(--panel-accent);
+      cursor: inherit;
     }
 
     .dp-toolbar-btn-text {
-      grid-column: 2;
-      grid-row: 1;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--panel-text);
-      line-height: 1.1;
-    }
-
-    .dp-toolbar-btn-cue {
-      grid-column: 2;
-      grid-row: 2;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--panel-muted);
-      line-height: 1.1;
+      line-height: 1;
+      cursor: inherit;
     }
 
     .dp-toolbar-btn-grip {
       position: absolute;
-      top: 8px;
+      top: 50%;
       right: 10px;
-      font-size: 11px;
-      line-height: 0.8;
-      letter-spacing: -1px;
+      transform: translateY(-50%);
+      font-size: 12px;
+      line-height: 1;
       color: var(--panel-muted);
-      opacity: 0.9;
+      opacity: 0.78;
       pointer-events: none;
+      cursor: inherit;
     }
 
     .dp-toolbar-btn.is-active {
@@ -34073,14 +34096,14 @@
         flex-wrap: wrap;
       }
 
-      .dp-toolbar-btn-create {
-        min-width: 112px;
-        min-height: 52px;
-        padding-right: 30px;
+      .dp-toolbar-create-strip {
+        gap: 2px;
+        padding: 3px;
       }
 
-      .dp-toolbar-btn-cue {
-        font-size: 9px;
+      .dp-toolbar-btn-create {
+        min-height: 42px;
+        padding-right: 24px;
       }
 
       .dp-topbar-group + .dp-topbar-group {
