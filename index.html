@@ -255,11 +255,11 @@
     }
   
     normalizeSettings(settings) {
-      return AppSettings.extractHighlightingSettings(settings);
+      return AppSettings.extractWorkspaceSettings(settings);
     }
   
     getSettings() {
-      return this.appSettings?.getHighlightingSettings?.() ?? Workspace.createDefaultSettings();
+      return this.appSettings?.getWorkspaceSettings?.() ?? Workspace.createDefaultSettings();
     }
   
     setSettings(settings) {
@@ -275,6 +275,10 @@
   
     isConnectorHighlightingEnabled() {
       return this.appSettings?.isConnectorHighlightingEnabled?.() === true;
+    }
+  
+    isGridSnappingEnabled() {
+      return this.appSettings?.isGridSnappingEnabled?.() === true;
     }
   
     isPacketActivityHighlightingEnabled() {
@@ -1575,8 +1579,10 @@
     static defaultSettings = Object.freeze({
       themeMode: Workspace.defaultThemeMode,
       interfaceScale: Workspace.defaultInterfaceScale,
+      showIntroPageOnStartup: true,
       enableComponentHighlighting: false,
       enableConnectorHighlighting: true,
+      enableGridSnapping: false,
       showLibraryWindowInToolbar: false,
       showProjectDataWindowInToolbar: false,
       showLogWindowInToolbar: false,
@@ -1612,8 +1618,10 @@
       return {
         themeMode: Workspace.normalizeThemeModeValue(settings?.themeMode),
         interfaceScale: Workspace.normalizeInterfaceScaleValue(settings?.interfaceScale),
+        showIntroPageOnStartup: settings?.showIntroPageOnStartup !== false,
         enableComponentHighlighting: settings?.enableComponentHighlighting === true,
         enableConnectorHighlighting: settings?.enableConnectorHighlighting === true,
+        enableGridSnapping: settings?.enableGridSnapping === true,
         showLibraryWindowInToolbar: settings?.showLibraryWindowInToolbar === true,
         showProjectDataWindowInToolbar: settings?.showProjectDataWindowInToolbar === true,
         showLogWindowInToolbar: settings?.showLogWindowInToolbar === true,
@@ -1631,6 +1639,15 @@
       };
     }
   
+    static extractWorkspaceSettings(settings) {
+      const normalizedSettings = AppSettings.normalizeSettings(settings);
+      return {
+        enableComponentHighlighting: normalizedSettings.enableComponentHighlighting,
+        enableConnectorHighlighting: normalizedSettings.enableConnectorHighlighting,
+        enableGridSnapping: normalizedSettings.enableGridSnapping,
+      };
+    }
+  
     getSettings() {
       return { ...this.settings };
     }
@@ -1639,12 +1656,24 @@
       return AppSettings.extractHighlightingSettings(this.settings);
     }
   
+    getWorkspaceSettings() {
+      return AppSettings.extractWorkspaceSettings(this.settings);
+    }
+  
     isComponentHighlightingEnabled() {
       return this.settings.enableComponentHighlighting === true;
     }
   
     isConnectorHighlightingEnabled() {
       return this.settings.enableConnectorHighlighting === true;
+    }
+  
+    isGridSnappingEnabled() {
+      return this.settings.enableGridSnapping === true;
+    }
+  
+    shouldShowIntroPageOnStartup() {
+      return this.settings.showIntroPageOnStartup !== false;
     }
   
     applySettings(settings, options = {}) {
@@ -3236,7 +3265,9 @@
         const dragDeltaX = this.dragHandle.x() - dragHandleStartX;
         const dragDeltaY = this.dragHandle.y() - dragHandleStartY;
         if (dragV) {
-          const newHeight = componentDragStartHeight + dragDeltaY;
+          const newHeight = this.konvaWorkspace.resolveItemSizeValue?.(
+            componentDragStartHeight + dragDeltaY,
+          ) ?? (componentDragStartHeight + dragDeltaY);
           this.setHostHeightFunc(newHeight);
         }
         else {
@@ -3246,7 +3277,9 @@
   
         }
         if (dragH) {
-          const newWidth = componentDragStartWidth + dragDeltaX;
+          const newWidth = this.konvaWorkspace.resolveItemSizeValue?.(
+            componentDragStartWidth + dragDeltaX,
+          ) ?? (componentDragStartWidth + dragDeltaX);
          // this.logger.log(`componentDragStartWidth[${componentDragStartWidth}] + (this.dragHandle.x()[${this.dragHandle.x()}] - dragHandleStartX[${dragHandleStartX}])`)
           this.setHostWidthFunc(newWidth);
         }
@@ -4365,7 +4398,7 @@
     }
   
     setCanvasSize(size) {
-      let nextWidth = Number(size?.width);
+      let nextWidth = this.konvaWorkspace.resolveItemSizeValue(size?.width);
       if (!Number.isFinite(nextWidth)) return;
       nextWidth = Math.max(nextWidth, this.getMinWidthForConnectables());
   
@@ -4402,8 +4435,7 @@
     }
   
     setCanvasPosition(x, y) {
-      const clampedPosition = this.konvaWorkspace.getClampedPositionWithinParentBounds(this, { x, y });
-      const nextPosition = clampedPosition ?? { x, y };
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
       this.group.position(nextPosition);
       this.updateConnectionPoints();
       this.konvaWorkspace.ensureAncestorsFit(this);
@@ -4633,14 +4665,12 @@
     }
   
     applyCanvasSize(size, clampWithinParent = true) {
-      const nextWidth = Math.max(
-        Number(size?.width) || this.rect.width(),
-        this.getMinWidth(),
-      );
-      const nextHeight = Math.max(
-        Number(size?.height) || this.rect.height(),
-        this.getMinHeight(),
-      );
+      let nextWidth = this.konvaWorkspace.resolveItemSizeValue(size?.width);
+      if (!Number.isFinite(nextWidth)) nextWidth = this.rect.width();
+      nextWidth = Math.max(nextWidth, this.getMinWidth());
+      let nextHeight = this.konvaWorkspace.resolveItemSizeValue(size?.height);
+      if (!Number.isFinite(nextHeight)) nextHeight = this.rect.height();
+      nextHeight = Math.max(nextHeight, this.getMinHeight());
   
       this.rect.width(nextWidth);
       this.rectHeader.width(nextWidth);
@@ -4753,8 +4783,7 @@
     }
   
     setCanvasPosition(x, y) {
-      const clampedPosition = this.konvaWorkspace.getClampedPositionWithinParentBounds(this, { x, y });
-      const nextPosition = clampedPosition ?? { x, y };
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
       this.group.position(nextPosition);
       this.konvaWorkspace.ensureAncestorsFit(this);
     }
@@ -5241,13 +5270,17 @@
     setCanvasSize(size) {
       if (!size) return;
       const minChildSize = this.getMinSizeForChildren();
-      const nextWidth = Math.max(
-        Number(size.width) || this.rect.width(),
+      let nextWidth = this.konvaWorkspace.resolveItemSizeValue(size.width);
+      if (!Number.isFinite(nextWidth)) nextWidth = this.rect.width();
+      nextWidth = Math.max(
+        nextWidth,
         this.containerStyles.minWidth(),
         minChildSize.width,
       );
-      const nextHeight = Math.max(
-        Number(size.height) || this.rect.height(),
+      let nextHeight = this.konvaWorkspace.resolveItemSizeValue(size.height);
+      if (!Number.isFinite(nextHeight)) nextHeight = this.rect.height();
+      nextHeight = Math.max(
+        nextHeight,
         this.containerStyles.minWidth(),
         minChildSize.height,
       );
@@ -5736,8 +5769,7 @@
     }
   
     setCanvasPosition(x, y) {
-      const clampedPosition = this.konvaWorkspace.getClampedPositionWithinParentBounds(this, { x, y });
-      const nextPosition = clampedPosition ?? { x, y };
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
       this.moveSubtreeToPosition(nextPosition);
       this.expandDisplacementMemo = [];
       this.expandDisplacementSourcePosition = null;
@@ -6890,6 +6922,8 @@
     static darkGridStroke = "rgba(148, 163, 184, 0.18)";
     static defaultBackgroundFill = "#f8fafc";
     static darkBackgroundFill = "#0f172a";
+    static gridStepSize = 40;
+    static itemSnapStepSize = KonvaWorkspace.gridStepSize / 2;
   
     dragFollowers = new Set(); // All moved elements except the drag lead
     konvaComponents = new Map();
@@ -7385,8 +7419,70 @@
       return this.workspace.isConnectorHighlightingEnabled?.() === true;
     }
   
+    isGridSnappingEnabled() {
+      return this.workspace.isGridSnappingEnabled?.() === true;
+    }
+  
     isPacketActivityHighlightingEnabled() {
       return this.workspace.isPacketActivityHighlightingEnabled?.() === true;
+    }
+  
+    snapValueToGrid(value, step = KonvaWorkspace.itemSnapStepSize) {
+      const parsedValue = Number(value);
+      const parsedStep = Number(step);
+      if (!Number.isFinite(parsedValue) || !Number.isFinite(parsedStep) || parsedStep <= 0) {
+        return parsedValue;
+      }
+      return Math.round(parsedValue / parsedStep) * parsedStep;
+    }
+  
+    resolveItemSizeValue(value) {
+      const parsedValue = Number(value);
+      if (!Number.isFinite(parsedValue)) return parsedValue;
+      if (!this.isGridSnappingEnabled()) return parsedValue;
+      return this.snapValueToGrid(parsedValue);
+    }
+  
+    resolveItemPosition(konvaComponent, position, options = {}) {
+      const {
+        clamp = true,
+        snap = true,
+      } = options;
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  
+      let nextPosition = { x, y };
+      if (snap && this.isGridSnappingEnabled()) {
+        nextPosition = {
+          x: this.snapValueToGrid(nextPosition.x),
+          y: this.snapValueToGrid(nextPosition.y),
+        };
+      }
+  
+      if (!clamp) return nextPosition;
+      return this.getClampedPositionWithinParentBounds(konvaComponent, nextPosition) ?? nextPosition;
+    }
+  
+    applyResolvedDragLeadPosition(konvaComponent) {
+      const currentPosition = konvaComponent?.getCanvasPosition?.();
+      const nextPosition = this.resolveItemPosition(konvaComponent, currentPosition);
+      if (!currentPosition || !nextPosition) return currentPosition ?? null;
+  
+      if (
+        nextPosition.x !== currentPosition.x
+        || nextPosition.y !== currentPosition.y
+      ) {
+        const element = konvaComponent?.getKonvaElement?.();
+        if (typeof element?.position === "function") {
+          element.position(nextPosition);
+        } else {
+          element?.x?.(nextPosition.x);
+          element?.y?.(nextPosition.y);
+        }
+      }
+  
+      return nextPosition;
     }
   
     selectItem(konvaElement, shiftKey) {
@@ -7434,7 +7530,7 @@
     }
   
     setupGrid(layer) {
-      const stepSize = 40;
+      const stepSize = KonvaWorkspace.gridStepSize;
       const length = 5000;
       const steps = (length + this.dragbound) / stepSize;
       const backgroundFill = this.getWorkspaceBackgroundFill(Project.createDefaultSettings());
@@ -7582,6 +7678,12 @@
       };
       container.addEventListener("pointerup", releaseTouchPointer);
       container.addEventListener("pointercancel", releaseTouchPointer);
+      const finishCanvasPointerInteraction = (event) => {
+        releaseTouchPointer(event);
+        this.finishPointerInteraction(event);
+      };
+      window.addEventListener("pointerup", finishCanvasPointerInteraction);
+      window.addEventListener("pointercancel", finishCanvasPointerInteraction);
   
       this.marqueeSelection = new Konva.Rect({
         visible: false,
@@ -7611,8 +7713,7 @@
       });
   
       this.stage.on("mouseup.selection", (event) => {
-        this.finishStagePan(event);
-        this.finishMarqueeSelection(event);
+        this.finishPointerInteraction(event);
       });
   
       this.stage.on("touchstart.selection", (event) => {
@@ -7749,6 +7850,12 @@
       this.defaultCursor();
     }
   
+    finishPointerInteraction(event) {
+      const normalizedEvent = event?.evt ? event : { evt: event };
+      this.finishStagePan(normalizedEvent);
+      this.finishMarqueeSelection(normalizedEvent);
+    }
+  
     startMarqueeSelection(event) {
       const pointer = this.stage.getRelativePointerPosition();
       if (!pointer) return;
@@ -7784,13 +7891,16 @@
   
       const selectionRect = this.marqueeSelection.getClientRect();
       const shouldAdd = this.selectionShiftKey === true;
+      const didDragSelection = this.selectionDragged === true;
       const selectedItems = this.getSelectableItemsInRect(selectionRect);
   
       this.marqueeSelection.visible(false);
       this.selectionAnchor = null;
+      this.selectionShiftKey = false;
+      this.selectionDragged = false;
       this.primaryLayer.batchDraw();
   
-      if (!this.selectionDragged) {
+      if (!didDragSelection) {
         if (!shouldAdd) {
           this.workspace.clearSelection();
         }
@@ -8675,20 +8785,8 @@
     }
   
     getDragMoveDelta(event, konvaComponent) {
-      const movementX = Number(event?.evt?.movementX);
-      const movementY = Number(event?.evt?.movementY);
-      if (Number.isFinite(movementX) && Number.isFinite(movementY)) {
-        const currentPosition = konvaComponent?.getCanvasPosition?.();
-        if (currentPosition) {
-          this.lastDragLeadPosition = currentPosition;
-        }
-        return {
-          x: movementX / this.currentScale,
-          y: movementY / this.currentScale,
-        };
-      }
-  
-      const currentPosition = konvaComponent?.getCanvasPosition?.();
+      const currentPosition = this.applyResolvedDragLeadPosition(konvaComponent)
+        ?? konvaComponent?.getCanvasPosition?.();
       const previousPosition = this.lastDragLeadPosition;
       if (currentPosition) {
         this.lastDragLeadPosition = currentPosition;
@@ -9068,6 +9166,16 @@
   
           this.bezierLine.on('pointerdown', (e) => {
               this.konvaWorkspace.workspace.selectItem(this.connection, e.evt.shiftKey);
+          });
+          this.bezierLine.on('mouseenter', () => {
+              if (!this.konvaWorkspace.isConnecting()) {
+                  this.konvaWorkspace.setCursor('grab');
+              }
+          });
+          this.bezierLine.on('mouseleave', () => {
+              if (!this.konvaWorkspace.isConnecting()) {
+                  this.konvaWorkspace.defaultCursor();
+              }
           });
           this.group.add(this.bezierLine);
           if (this.isPacketActive) {
@@ -20826,6 +20934,8 @@
           displayCard.body.appendChild(this.interfaceScaleSetting.row);
   
           shell.appendChild(displayCard.element);
+          shell.appendChild(this.buildStartupCard().element);
+          shell.appendChild(this.buildCanvasInteractionCard().element);
           shell.appendChild(this.buildHighlightingCard().element);
           shell.appendChild(this.buildFeatureGatesCard().element);
           settingsPanelItem.appendChild(shell);
@@ -21388,7 +21498,7 @@
           return snapshot;
       }
   
-      loadCompactHelpSampleWorkspace() {
+      loadCompactHelpSampleWorkspace(options = {}) {
           try {
               this.projectController.ensureWorkspaceIsStopped?.('Loading compact help demo');
               const sampleWorkspaceName = this.getCompactHelpSampleWorkspaceName();
@@ -21414,12 +21524,25 @@
                   this.loadTextarea.value = this.persistence.serialize();
               }
               this.syncProjectUi();
+              if (options.openHelpPanel === true) {
+                  this.helpPanel?.dockTo?.(options.helpDockSide ?? 'right');
+                  this.helpPanel?.open?.();
+              }
               this.setStatus('Loaded compact help demo workspace. Press Start to watch the timer drive messages.');
+              return true;
           } catch (error) {
               console.error('Failed to load compact help sample workspace.', error);
               this.helpPanel.open();
               this.setStatus(error.message || 'Compact help demo load failed.');
+              return false;
           }
+      }
+  
+      loadCompactHelpSampleWorkspaceWithDockedHelp() {
+          return this.loadCompactHelpSampleWorkspace({
+              openHelpPanel: true,
+              helpDockSide: 'right',
+          });
       }
   
       createHelpSectionCard(title, entries) {
@@ -21885,7 +22008,7 @@
                   'use the user description to decide component count, names, structure, connections, properties, channels, timers, triggers, control panels, and code',
                   'minimalProject is only a schema-safe fallback skeleton, not the desired output when the user described a real system',
                   'use codeMode="structured" and include codeSections unless legacy code is explicitly needed',
-                  'project settings should include only the canvas color fields; interface theme, interface size, and highlighting live in application settings outside the project file',
+                  'project settings should include only the canvas color fields; interface theme, interface size, highlighting, and grid snapping live in application settings outside the project file',
                   'workspaceSnapshot.windowLayout should be present; if layout is unknown use { "version": 1, "panels": [], "docks": [] }',
                   'container size uses expanded and collapsed bounds; component and text sizes use simple width/height objects',
                   'if size is unknown use null',
@@ -21949,6 +22072,40 @@
           highlightingCard.body.appendChild(this.componentHighlightingToggle.row);
           highlightingCard.body.appendChild(this.connectorHighlightingToggle.row);
           return highlightingCard;
+      }
+  
+      buildCanvasInteractionCard() {
+          const canvasCard = this.panelHelper.createSectionCard('Canvas');
+  
+          this.gridSnappingToggle = this.createSettingToggleRow(
+              'Grid Snapping',
+              'Snap dragging and resizing to half-grid steps (20px). Disabled by default.',
+              (nextValue) => {
+                  this.appSettings.setSettings({
+                      enableGridSnapping: nextValue,
+                  });
+              },
+          );
+  
+          canvasCard.body.appendChild(this.gridSnappingToggle.row);
+          return canvasCard;
+      }
+  
+      buildStartupCard() {
+          const startupCard = this.panelHelper.createSectionCard('Startup');
+  
+          this.showIntroPageOnStartupToggle = this.createSettingToggleRow(
+              'Opening Page',
+              'Show the welcome screen with quick-start project choices each time the app loads.',
+              (nextValue) => {
+                  this.appSettings.setSettings({
+                      showIntroPageOnStartup: nextValue,
+                  });
+              },
+          );
+  
+          startupCard.body.appendChild(this.showIntroPageOnStartupToggle.row);
+          return startupCard;
       }
   
       buildFeatureGatesCard() {
@@ -22745,6 +22902,8 @@
           const nextSettings = AppSettings.normalizeSettings(
               settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
           );
+          this.showIntroPageOnStartupToggle?.toggle?.setChecked?.(nextSettings.showIntroPageOnStartup === true);
+          this.gridSnappingToggle?.toggle?.setChecked?.(nextSettings.enableGridSnapping === true);
           this.componentHighlightingToggle?.toggle?.setChecked?.(nextSettings.enableComponentHighlighting === true);
           this.connectorHighlightingToggle?.toggle?.setChecked?.(nextSettings.enableConnectorHighlighting === true);
           this.libraryWindowVisibilityToggle?.toggle?.setChecked?.(nextSettings.showLibraryWindowInToolbar === true);
@@ -30078,6 +30237,294 @@
       }
   }
   </script>
+  <!-- inlined from ./src/StartupIntro.js -->
+  <script>
+  class StartupIntro {
+  
+      constructor(options = {}) {
+          this.appSettings = options.appSettings ?? null;
+          this.projectController = options.projectController ?? null;
+          this.workspacePanel = options.workspacePanel ?? null;
+          this.persistence = options.persistence
+              ?? this.workspacePanel?.persistence
+              ?? new ProjectPersistence(this.projectController, options.logger ?? null);
+          this.rootElement = options.rootElement ?? document.body;
+          this.appSettingsListenerKey = 'startupIntroAppSettings';
+          this.element = null;
+          this.savedProjectsCount = null;
+          this.savedProjectsList = null;
+          this.disableIntroCheckbox = null;
+  
+          this.build();
+          this.appSettings?.observable?.addFieldListener?.('settings', (settings) => {
+              this.syncSettingsUi(settings);
+          }, this.appSettingsListenerKey);
+          this.syncSettingsUi(this.appSettings?.getSettings?.());
+      }
+  
+      build() {
+          const overlay = document.createElement('div');
+          overlay.className = 'dp-startup-intro';
+          overlay.hidden = true;
+  
+          const windowElement = document.createElement('div');
+          windowElement.className = 'dp-startup-intro-window';
+  
+          const hero = document.createElement('div');
+          hero.className = 'dp-startup-intro-hero';
+  
+          const eyebrow = document.createElement('div');
+          eyebrow.className = 'dp-startup-intro-eyebrow';
+          eyebrow.innerText = 'Welcome to Jigbox';
+  
+          const title = document.createElement('h1');
+          title.className = 'dp-startup-intro-title';
+          title.innerText = 'Mock up Systems, play with Ideas.';
+  
+          const description = document.createElement('p');
+          description.className = 'dp-startup-intro-description';
+          description.innerText = 'Start with a blank canvas, open the guided demo with Help docked beside it, or jump back into a project stored in this browser.';
+  
+          hero.appendChild(eyebrow);
+          hero.appendChild(title);
+          hero.appendChild(description);
+  
+          const actions = document.createElement('div');
+          actions.className = 'dp-startup-intro-actions';
+          actions.appendChild(this.createActionCard({
+              accentClassName: 'is-default',
+              badgeText: 'Fresh Start',
+              title: 'Start with Default Project',
+              description: 'Open the clean project that loads by default and begin building right away.',
+              buttonLabel: 'Open Blank Workspace',
+              buttonKind: 'primary',
+              onClick: () => {
+                  this.close();
+              },
+          }));
+          actions.appendChild(this.createActionCard({
+              accentClassName: 'is-demo',
+              badgeText: 'Guided Demo',
+              title: 'Open Demo Project',
+              description: 'Load the compact sample workspace and open the Help window docked on the right for a guided tour.',
+              buttonLabel: 'Open Demo with Help',
+              buttonKind: 'secondary',
+              onClick: () => {
+                  const didLoad = this.workspacePanel?.loadCompactHelpSampleWorkspaceWithDockedHelp?.();
+                  if (didLoad !== false) {
+                      this.close();
+                  }
+              },
+          }));
+  
+          const savedProjectsSection = document.createElement('section');
+          savedProjectsSection.className = 'dp-startup-intro-saved';
+  
+          const savedProjectsHeader = document.createElement('div');
+          savedProjectsHeader.className = 'dp-startup-intro-saved-header';
+  
+          const savedProjectsTitleShell = document.createElement('div');
+          const savedProjectsEyebrow = document.createElement('div');
+          savedProjectsEyebrow.className = 'dp-startup-intro-section-eyebrow';
+          savedProjectsEyebrow.innerText = 'Saved Projects';
+          const savedProjectsTitle = document.createElement('h2');
+          savedProjectsTitle.className = 'dp-startup-intro-section-title';
+          savedProjectsTitle.innerText = 'Resume a browser-saved project';
+          const savedProjectsDescription = document.createElement('p');
+          savedProjectsDescription.className = 'dp-startup-intro-section-description';
+          savedProjectsDescription.innerText = 'These projects were persisted in this browser and are ready to reopen.';
+          savedProjectsTitleShell.appendChild(savedProjectsEyebrow);
+          savedProjectsTitleShell.appendChild(savedProjectsTitle);
+          savedProjectsTitleShell.appendChild(savedProjectsDescription);
+  
+          const savedProjectsCount = document.createElement('div');
+          savedProjectsCount.className = 'dp-startup-intro-project-count';
+          savedProjectsHeader.appendChild(savedProjectsTitleShell);
+          savedProjectsHeader.appendChild(savedProjectsCount);
+  
+          const savedProjectsList = document.createElement('div');
+          savedProjectsList.className = 'dp-startup-intro-project-list';
+  
+          const footer = document.createElement('label');
+          footer.className = 'dp-startup-intro-footer';
+          const disableCheckbox = document.createElement('input');
+          disableCheckbox.type = 'checkbox';
+          disableCheckbox.addEventListener('change', () => {
+              this.appSettings?.setSettings?.({
+                  showIntroPageOnStartup: disableCheckbox.checked !== true,
+              });
+          });
+          const footerText = document.createElement('span');
+          footerText.innerText = 'Do not show this intro page on startup';
+          footer.appendChild(disableCheckbox);
+          footer.appendChild(footerText);
+  
+          savedProjectsSection.appendChild(savedProjectsHeader);
+          savedProjectsSection.appendChild(savedProjectsList);
+  
+          windowElement.appendChild(hero);
+          windowElement.appendChild(actions);
+          windowElement.appendChild(savedProjectsSection);
+          windowElement.appendChild(footer);
+          overlay.appendChild(windowElement);
+  
+          this.rootElement.appendChild(overlay);
+          this.element = overlay;
+          this.savedProjectsCount = savedProjectsCount;
+          this.savedProjectsList = savedProjectsList;
+          this.disableIntroCheckbox = disableCheckbox;
+      }
+  
+      createActionCard(options = {}) {
+          const card = document.createElement('section');
+          card.className = `dp-startup-intro-card ${options.accentClassName ?? ''}`.trim();
+  
+          const badge = document.createElement('div');
+          badge.className = 'dp-startup-intro-card-badge';
+          badge.innerText = options.badgeText ?? '';
+  
+          const title = document.createElement('h2');
+          title.className = 'dp-startup-intro-card-title';
+          title.innerText = options.title ?? '';
+  
+          const description = document.createElement('p');
+          description.className = 'dp-startup-intro-card-description';
+          description.innerText = options.description ?? '';
+  
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = options.buttonKind === 'primary'
+              ? 'dp-startup-intro-button dp-startup-intro-button-primary'
+              : 'dp-startup-intro-button dp-startup-intro-button-secondary';
+          button.innerText = options.buttonLabel ?? 'Open';
+          button.addEventListener('click', () => {
+              options.onClick?.();
+          });
+  
+          card.appendChild(badge);
+          card.appendChild(title);
+          card.appendChild(description);
+          card.appendChild(button);
+          return card;
+      }
+  
+      showIfNeeded() {
+          if (this.shouldShowOnStartup() !== true) {
+              this.close();
+              return false;
+          }
+          this.open();
+          return true;
+      }
+  
+      shouldShowOnStartup() {
+          if (typeof this.appSettings?.shouldShowIntroPageOnStartup === 'function') {
+              return this.appSettings.shouldShowIntroPageOnStartup();
+          }
+          return AppSettings.normalizeSettings(this.appSettings?.getSettings?.()).showIntroPageOnStartup === true;
+      }
+  
+      open() {
+          this.renderSavedProjects();
+          this.syncSettingsUi(this.appSettings?.getSettings?.());
+          if (this.element) {
+              this.element.hidden = false;
+          }
+      }
+  
+      close() {
+          if (this.element) {
+              this.element.hidden = true;
+          }
+      }
+  
+      syncSettingsUi(settings = null) {
+          if (!this.disableIntroCheckbox) return;
+          const normalizedSettings = AppSettings.normalizeSettings(
+              settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
+          );
+          this.disableIntroCheckbox.checked = normalizedSettings.showIntroPageOnStartup !== true;
+      }
+  
+      renderSavedProjects() {
+          if (!this.savedProjectsList) return;
+  
+          const savedProjects = this.persistence?.getBrowserCacheProjectSummaries?.() ?? [];
+          this.savedProjectsList.replaceChildren();
+          if (this.savedProjectsCount) {
+              this.savedProjectsCount.innerText = `${savedProjects.length} saved`;
+          }
+  
+          if (savedProjects.length === 0) {
+              const emptyState = document.createElement('div');
+              emptyState.className = 'dp-startup-intro-empty-state';
+              emptyState.innerText = 'No persisted browser projects yet. Save one from the Persistence window and it will appear here next time.';
+              this.savedProjectsList.appendChild(emptyState);
+              return;
+          }
+  
+          savedProjects.forEach((projectSummary) => {
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'dp-startup-intro-project-button';
+              button.addEventListener('click', () => {
+                  this.openSavedProject(projectSummary.id);
+              });
+  
+              const titleRow = document.createElement('div');
+              titleRow.className = 'dp-startup-intro-project-title-row';
+              const name = document.createElement('div');
+              name.className = 'dp-startup-intro-project-title';
+              name.innerText = projectSummary.name ?? 'Untitled Project';
+              const chip = document.createElement('div');
+              chip.className = 'dp-startup-intro-project-chip';
+              chip.innerText = this.formatWorkspaceCount(projectSummary.workspaceCount);
+              titleRow.appendChild(name);
+              titleRow.appendChild(chip);
+  
+              const meta = document.createElement('div');
+              meta.className = 'dp-startup-intro-project-meta';
+              meta.innerText = `Saved ${this.formatSavedAt(projectSummary.savedAt)}`;
+  
+              button.appendChild(titleRow);
+              button.appendChild(meta);
+              this.savedProjectsList.appendChild(button);
+          });
+      }
+  
+      openSavedProject(projectId) {
+          try {
+              const projectSummary = this.persistence.loadFromBrowserCache(projectId);
+              if (this.workspacePanel?.loadTextarea) {
+                  this.workspacePanel.loadTextarea.value = this.persistence.serialize();
+              }
+              this.workspacePanel?.syncProjectUi?.();
+              this.workspacePanel?.setStatus?.(`Loaded saved project ${projectSummary.name}.`);
+              this.close();
+          } catch (error) {
+              console.error('Failed to load saved browser project.', error);
+              this.workspacePanel?.setStatus?.(error.message || 'Saved project load failed.');
+          }
+      }
+  
+      formatWorkspaceCount(workspaceCount = 0) {
+          const count = Number.isFinite(workspaceCount) ? workspaceCount : 0;
+          return `${count} workspace${count === 1 ? '' : 's'}`;
+      }
+  
+      formatSavedAt(savedAt = null) {
+          if (!savedAt) return 'recently';
+          try {
+              return new Intl.DateTimeFormat(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+              }).format(new Date(savedAt));
+          } catch (error) {
+              return savedAt;
+          }
+      }
+  }
+  </script>
   <!-- inlined from ./src/index.js -->
   <script>
   function start() {
@@ -30139,6 +30586,33 @@
           loggerPanel,
           controlPanelsPanel,
       );
+  
+      const app = {
+          panelHelper,
+          loggerPanel,
+          logger,
+          appSettings,
+          workspace,
+          konvaWorkspace,
+          projectController,
+          componentPanel,
+          workspaceNavigatorPanel,
+          codePanel,
+          controlPanelsPanel,
+          workspacePanel,
+      };
+      const startupIntro = new StartupIntro({
+          appSettings,
+          projectController,
+          workspacePanel,
+          persistence: workspacePanel.persistence,
+          rootElement: document.body,
+          logger,
+      });
+      startupIntro.showIfNeeded();
+      app.startupIntro = startupIntro;
+      window.doublephiApp = app;
+      return app;
   }
   </script>
   <title>Jigbox</title>
@@ -33646,10 +34120,332 @@
       }
     }
 
+    .dp-startup-intro {
+      position: fixed;
+      inset: 0;
+      z-index: 250000;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 244, 214, 0.4), transparent 32%),
+        radial-gradient(circle at right 18%, rgba(34, 197, 94, 0.14), transparent 22%),
+        rgba(15, 23, 42, 0.28);
+      backdrop-filter: blur(16px);
+    }
+
+    .dp-startup-intro-window {
+      width: min(1040px, calc(100vw - 56px));
+      max-height: min(860px, calc(100vh - 56px));
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.88fr);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      column-gap: 16px;
+      row-gap: 14px;
+      overflow: hidden;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(255, 252, 244, 0.98), rgba(242, 248, 244, 0.96)),
+        rgba(255, 255, 255, 0.94);
+      box-shadow:
+        0 34px 90px rgba(15, 23, 42, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.76);
+      color: #172033;
+    }
+
+    .dp-startup-intro-hero {
+      display: grid;
+      gap: 8px;
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .dp-startup-intro-eyebrow,
+    .dp-startup-intro-section-eyebrow,
+    .dp-startup-intro-card-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #0f766e;
+    }
+
+    .dp-startup-intro-title,
+    .dp-startup-intro-section-title,
+    .dp-startup-intro-card-title {
+      margin: 0;
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #172033;
+    }
+
+    .dp-startup-intro-title {
+      max-width: 12ch;
+      font-size: clamp(30px, 4.8vw, 46px);
+      line-height: 1;
+    }
+
+    .dp-startup-intro-description,
+    .dp-startup-intro-section-description,
+    .dp-startup-intro-card-description,
+    .dp-startup-intro-project-meta,
+    .dp-startup-intro-empty-state,
+    .dp-startup-intro-footer {
+      margin: 0;
+      color: #5f6b7a;
+      line-height: 1.5;
+    }
+
+    .dp-startup-intro-description {
+      max-width: 68ch;
+      font-size: 15px;
+    }
+
+    .dp-startup-intro-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      grid-column: 1;
+      grid-row: 2;
+      align-content: start;
+    }
+
+    .dp-startup-intro-card,
+    .dp-startup-intro-saved {
+      position: relative;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.72),
+        0 14px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    .dp-startup-intro-card {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      padding: 18px;
+      min-height: 172px;
+    }
+
+    .dp-startup-intro-card.is-default {
+      background:
+        linear-gradient(180deg, rgba(242, 255, 248, 0.92), rgba(255, 255, 255, 0.74));
+    }
+
+    .dp-startup-intro-card.is-demo {
+      background:
+        linear-gradient(180deg, rgba(255, 247, 229, 0.96), rgba(255, 255, 255, 0.76));
+    }
+
+    .dp-startup-intro-card-title,
+    .dp-startup-intro-section-title {
+      font-size: 24px;
+      line-height: 1.08;
+    }
+
+    .dp-startup-intro-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      width: fit-content;
+      padding: 0 16px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    }
+
+    .dp-startup-intro-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+    }
+
+    .dp-startup-intro-button-primary {
+      background: linear-gradient(90deg, #0f766e 0%, #15998d 100%);
+      color: white;
+    }
+
+    .dp-startup-intro-button-secondary {
+      background: rgba(255, 255, 255, 0.78);
+      border-color: rgba(148, 163, 184, 0.24);
+      color: #172033;
+    }
+
+    .dp-startup-intro-saved {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      grid-column: 2;
+      grid-row: 1 / 4;
+      align-self: stretch;
+      min-height: 0;
+      padding: 18px;
+    }
+
+    .dp-startup-intro-saved-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .dp-startup-intro-project-count {
+      flex: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.1);
+      color: #0f766e;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .dp-startup-intro-project-list {
+      display: grid;
+      gap: 12px;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .dp-startup-intro-project-button {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.78);
+      text-align: left;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .dp-startup-intro-project-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(15, 118, 110, 0.24);
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .dp-startup-intro-project-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .dp-startup-intro-project-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #172033;
+    }
+
+    .dp-startup-intro-project-chip {
+      flex: none;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(180, 83, 9, 0.1);
+      color: #9a4d10;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .dp-startup-intro-empty-state {
+      padding: 18px 16px;
+      border: 1px dashed rgba(148, 163, 184, 0.3);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+    }
+
+    .dp-startup-intro-footer {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      grid-column: 1;
+      grid-row: 3;
+      align-self: end;
+      margin-top: 4px;
+      font-size: 14px;
+    }
+
+    .dp-startup-intro-footer input {
+      width: 18px;
+      height: 18px;
+      accent-color: #0f766e;
+    }
+
+    @media (max-width: 900px) {
+      .dp-startup-intro-window {
+        width: min(100vw - 28px, 1040px);
+        max-height: calc(100vh - 28px);
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        padding: 20px;
+      }
+
+      .dp-startup-intro-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .dp-startup-intro-title {
+        max-width: none;
+      }
+
+      .dp-startup-intro-hero,
+      .dp-startup-intro-actions,
+      .dp-startup-intro-saved,
+      .dp-startup-intro-footer {
+        grid-column: 1;
+        grid-row: auto;
+      }
+
+      .dp-startup-intro-saved-header,
+      .dp-startup-intro-project-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .dp-startup-intro-project-list {
+        max-height: min(34vh, 320px);
+      }
+    }
+
     @media (max-width: 680px) {
       .dp-panel {
         padding: 16px;
         border-radius: 20px;
+      }
+
+      .dp-startup-intro {
+        padding: 12px;
+      }
+
+      .dp-startup-intro-window {
+        width: calc(100vw - 24px);
+        max-height: calc(100vh - 24px);
+        padding: 16px;
+        border-radius: 22px;
+      }
+
+      .dp-startup-intro-title {
+        font-size: 30px;
+      }
+
+      .dp-startup-intro-card,
+      .dp-startup-intro-saved {
+        padding: 16px;
+      }
+
+      .dp-startup-intro-project-list {
+        max-height: min(38vh, 300px);
       }
 
       .dp-topbar-select {
