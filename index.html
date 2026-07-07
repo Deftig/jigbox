@@ -1578,11 +1578,11 @@
       enableComponentHighlighting: false,
       enableConnectorHighlighting: true,
       showLibraryWindowInToolbar: false,
+      showProjectDataWindowInToolbar: false,
       showLogWindowInToolbar: false,
       showCliWindowInToolbar: false,
       showControlPanelsWindowInToolbar: false,
-      showWorkspaceSelector: true,
-      showAddWorkspaceButton: true,
+      showWorkspaceSelector: false,
     });
   
     constructor(logger = null, options = {}) {
@@ -1607,17 +1607,19 @@
     }
   
     static normalizeSettings(settings) {
+      const showWorkspaceSelector = settings?.showWorkspaceSelector === true
+        || settings?.showAddWorkspaceButton === true;
       return {
         themeMode: Workspace.normalizeThemeModeValue(settings?.themeMode),
         interfaceScale: Workspace.normalizeInterfaceScaleValue(settings?.interfaceScale),
         enableComponentHighlighting: settings?.enableComponentHighlighting === true,
         enableConnectorHighlighting: settings?.enableConnectorHighlighting === true,
         showLibraryWindowInToolbar: settings?.showLibraryWindowInToolbar === true,
+        showProjectDataWindowInToolbar: settings?.showProjectDataWindowInToolbar === true,
         showLogWindowInToolbar: settings?.showLogWindowInToolbar === true,
         showCliWindowInToolbar: settings?.showCliWindowInToolbar === true,
         showControlPanelsWindowInToolbar: settings?.showControlPanelsWindowInToolbar === true,
-        showWorkspaceSelector: settings?.showWorkspaceSelector !== false,
-        showAddWorkspaceButton: settings?.showAddWorkspaceButton !== false,
+        showWorkspaceSelector,
       };
     }
   
@@ -3579,6 +3581,9 @@
   
       this.hitRect.on('mouseenter', (evt) => {
         this.setHover(true);
+        if (!this.konvaWorkspace.isConnecting()) {
+          this.konvaWorkspace.setCursor('grab');
+        }
         this.konvaWorkspace.socketMouseOver(this.konvaComponent, this);
       });
   
@@ -3586,6 +3591,9 @@
         const pos = this.hitRect.getRelativePointerPosition();
         if (pos.x < 0 || pos.x > this.hitRect.width() || pos.y < 0 || pos.y > this.hitRect.height() - 1) {
           this.setHover(false);
+          if (!this.konvaWorkspace.isConnecting()) {
+            this.konvaWorkspace.defaultCursor();
+          }
           this.konvaWorkspace.socketMouseOut(this.konvaComponent, this);
         }
       });
@@ -3598,6 +3606,7 @@
   
       this.hitRect.on('mousedown', (evt) => {
         evt.cancelBubble = true;
+        this.konvaWorkspace.setCursor('grabbing');
         this.konvaWorkspace.startConnector(this);
       });
   
@@ -8108,6 +8117,12 @@
     }
   
     getDefaultSpawnPosition() {
+      if (this.pendingSpawnPosition) {
+        const nextPosition = { ...this.pendingSpawnPosition };
+        this.pendingSpawnPosition = null;
+        return nextPosition;
+      }
+  
       const toolbar = document.querySelector(".dp-topbar");
       const toolbarRect = toolbar?.getBoundingClientRect?.();
       const spawnIndex = this.konvaComponents.size;
@@ -8120,6 +8135,18 @@
         x: (screenX - this.stage.x()) / this.stage.scaleX(),
         y: (screenY - this.stage.y()) / this.stage.scaleY(),
       };
+    }
+  
+    setNextSpawnPosition(position) {
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        this.pendingSpawnPosition = null;
+        return null;
+      }
+  
+      this.pendingSpawnPosition = { x, y };
+      return { ...this.pendingSpawnPosition };
     }
   
     getContainerElement() {
@@ -9337,6 +9364,7 @@
               const didPreviewChange = this.konvaWorkspace.clearConnectablePreviews(this.sourceKonvaConnectable);
               this.konvaWorkspace.clearConnectableHighlights();
               this.konvaWorkspace.stopConnector();
+              this.konvaWorkspace.defaultCursor();
               this.group.destroy();
               this.isDragging = false;
               const didSourcePreviewChange = this.sourceKonvaConnectable.hideSocketPreview();
@@ -20561,6 +20589,7 @@
           this.selectionListenerKey = 'workspacePanelSelection';
           this.projectListenerKey = 'workspacePanelProject';
           this.libraryDragMimeType = 'application/x-jigbox-library-item';
+          this.createItemDragMimeType = 'application/x-jigbox-create-item';
           this.libraryActiveTab = 'project';
           this.libraryFilterQuery = '';
           this.selectedProjectLibraryId = null;
@@ -20673,6 +20702,7 @@
           });
   
           this.attachLibraryCanvasDropTarget();
+          this.attachCreateCanvasDropTarget();
   
           ['dragenter', 'dragover'].forEach((eventName) => {
               window.addEventListener(eventName, (event) => {
@@ -20970,10 +21000,64 @@
           });
       }
   
+      attachCreateCanvasDropTarget() {
+          const canvasContainer = this.konvaWorkspace?.getContainerElement?.();
+          if (!(canvasContainer instanceof HTMLElement)) return;
+  
+          const isCreateDragEvent = (event) => (
+              Array.from(event?.dataTransfer?.types ?? []).includes(this.createItemDragMimeType)
+          );
+          const clearDropState = () => {
+              canvasContainer.classList.remove('is-create-drop-target');
+          };
+  
+          canvasContainer.addEventListener('dragenter', (event) => {
+              if (!isCreateDragEvent(event)) return;
+              event.preventDefault();
+              canvasContainer.classList.add('is-create-drop-target');
+          });
+  
+          canvasContainer.addEventListener('dragover', (event) => {
+              if (!isCreateDragEvent(event)) return;
+              event.preventDefault();
+              if (event.dataTransfer) {
+                  event.dataTransfer.dropEffect = 'copy';
+              }
+              canvasContainer.classList.add('is-create-drop-target');
+          });
+  
+          canvasContainer.addEventListener('dragleave', (event) => {
+              if (!isCreateDragEvent(event)) return;
+              event.preventDefault();
+              if (event.currentTarget === event.target) {
+                  clearDropState();
+              }
+          });
+  
+          canvasContainer.addEventListener('drop', (event) => {
+              if (!isCreateDragEvent(event)) return;
+              event.preventDefault();
+              clearDropState();
+  
+              const dragData = this.parseCreateToolbarDragData(
+                  event.dataTransfer?.getData?.(this.createItemDragMimeType) ?? '',
+              );
+              if (!dragData) return;
+  
+              const positionOffset = this.konvaWorkspace.getWorkspacePositionFromClientPoint?.({
+                  x: event.clientX,
+                  y: event.clientY,
+              });
+              this.handleCreateToolbarDrop(dragData, positionOffset);
+              this.konvaWorkspace.focusCanvas?.();
+          });
+      }
+  
       buildPersistencePanel() {
           const persistencePanelItem = this.persistencePanel.addPanelItem('persistence');
           const shell = this.panelHelper.createElement('div', 'dp-stack dp-fill-shell');
           const persistenceCard = this.panelHelper.createSectionCard('Project Data');
+          this.projectDataPersistenceCard = persistenceCard;
           persistenceCard.body.classList.add('dp-section-body-spaced');
           const persistenceActions = this.panelHelper.createElement('div', 'dp-inline-actions');
   
@@ -21044,6 +21128,7 @@
           shell.appendChild(browserCacheCard.element);
   
           persistencePanelItem.appendChild(shell);
+          this.syncProjectDataPanelVisibility();
           this.renderBrowserCacheProjectList();
       }
   
@@ -21879,6 +21964,16 @@
               },
           );
   
+          this.projectDataPanelVisibilityToggle = this.createSettingToggleRow(
+              'Project Data Panel',
+              'Show the Project Data save and load section inside the Persistence window.',
+              (nextValue) => {
+                  this.appSettings.setSettings({
+                      showProjectDataWindowInToolbar: nextValue,
+                  });
+              },
+          );
+  
           this.logWindowVisibilityToggle = this.createSettingToggleRow(
               'Log Window',
               'Show the Log window button in the toolbar menu.',
@@ -21911,7 +22006,7 @@
   
           this.workspaceSelectorVisibilityToggle = this.createSettingToggleRow(
               'Workspace Selector',
-              'Show the workspace selector in the toolbar.',
+              'Show the workspace selector and add workspace button in the toolbar.',
               (nextValue) => {
                   this.appSettings.setSettings({
                       showWorkspaceSelector: nextValue,
@@ -21919,23 +22014,13 @@
               },
           );
   
-          this.workspaceAddButtonVisibilityToggle = this.createSettingToggleRow(
-              'Add Workspace Button',
-              'Show the add workspace button in the toolbar.',
-              (nextValue) => {
-                  this.appSettings.setSettings({
-                      showAddWorkspaceButton: nextValue,
-                  });
-              },
-          );
-  
           [
               this.libraryWindowVisibilityToggle,
+              this.projectDataPanelVisibilityToggle,
               this.logWindowVisibilityToggle,
               this.cliWindowVisibilityToggle,
               this.controlPanelsWindowVisibilityToggle,
               this.workspaceSelectorVisibilityToggle,
-              this.workspaceAddButtonVisibilityToggle,
           ].forEach((settingRow) => {
               featureGatesCard.body.appendChild(settingRow.row);
           });
@@ -22245,15 +22330,33 @@
           executionGroup.appendChild(this.btnRestartExecution);
   
           const createGroup = this.createToolbarGroup('Create');
-          this.btnAddComponent = this.makeToolbarButton(ButtonSymbols.component, 'Add component', () => {
-              this.workspace.addNewBlankComponent();
-          });
-          this.btnAddContainer = this.makeToolbarButton(ButtonSymbols.container, 'Add container', () => {
-              this.workspace.addNewBlankContainer();
-          });
-          this.btnAddTextItem = this.makeToolbarButton(ButtonSymbols.text, 'Add text item', () => {
-              this.workspace.addNewBlankTextItem();
-          });
+          this.btnAddComponent = this.makeCreateToolbarButton(
+              ButtonSymbols.component,
+              'Add component',
+              'Component',
+              'component',
+              () => {
+                  this.workspace.addNewBlankComponent();
+              },
+          );
+          this.btnAddContainer = this.makeCreateToolbarButton(
+              ButtonSymbols.container,
+              'Add container',
+              'Container',
+              'container',
+              () => {
+                  this.workspace.addNewBlankContainer();
+              },
+          );
+          this.btnAddTextItem = this.makeCreateToolbarButton(
+              ButtonSymbols.text,
+              'Add text item',
+              'Text',
+              'text',
+              () => {
+                  this.workspace.addNewBlankTextItem();
+              },
+          );
           createGroup.appendChild(this.btnAddComponent);
           createGroup.appendChild(this.btnAddContainer);
           createGroup.appendChild(this.btnAddTextItem);
@@ -22314,6 +22417,44 @@
           button.title = tooltip;
           button.setAttribute('aria-label', tooltip);
           button.type = 'button';
+          return button;
+      }
+  
+      makeCreateToolbarButton(iconText, tooltip, labelText, itemType, onClick) {
+          const button = this.makeToolbarButton(iconText, tooltip, onClick);
+          const dragTooltip = `${tooltip} or drag to canvas`;
+          const icon = this.panelHelper.createElement('span', 'dp-toolbar-btn-icon');
+          const text = this.panelHelper.createElement('span', 'dp-toolbar-btn-text');
+          const cue = this.panelHelper.createElement('span', 'dp-toolbar-btn-cue');
+          const grip = this.panelHelper.createElement('span', 'dp-toolbar-btn-grip');
+  
+          button.classList.add('dp-toolbar-btn-create');
+          button.draggable = true;
+          button.innerText = '';
+          button.title = dragTooltip;
+          button.setAttribute('aria-label', dragTooltip);
+  
+          icon.innerText = iconText;
+          icon.setAttribute('aria-hidden', 'true');
+          text.innerText = labelText;
+          cue.innerText = 'Drag to canvas';
+          grip.setAttribute('aria-hidden', 'true');
+          grip.innerText = '⋮⋮';
+  
+          button.appendChild(icon);
+          button.appendChild(text);
+          button.appendChild(cue);
+          button.appendChild(grip);
+  
+          button.addEventListener('dragstart', (event) => {
+              this.handleCreateToolbarDragStart(event, {
+                  type: itemType,
+                  label: labelText,
+              });
+          });
+          button.addEventListener('dragend', (event) => {
+              this.handleCreateToolbarDragEnd(event.currentTarget);
+          });
           return button;
       }
   
@@ -22593,10 +22734,10 @@
               this.workspacePanelSelect.hidden = nextSettings.showWorkspaceSelector !== true;
           }
           if (this.btnAddWorkspace) {
-              this.btnAddWorkspace.hidden = nextSettings.showAddWorkspaceButton !== true;
+              this.btnAddWorkspace.hidden = nextSettings.showWorkspaceSelector !== true;
           }
           if (this.btnAddWorkspacePanel) {
-              this.btnAddWorkspacePanel.hidden = nextSettings.showAddWorkspaceButton !== true;
+              this.btnAddWorkspacePanel.hidden = nextSettings.showWorkspaceSelector !== true;
           }
       }
   
@@ -22607,17 +22748,30 @@
           this.componentHighlightingToggle?.toggle?.setChecked?.(nextSettings.enableComponentHighlighting === true);
           this.connectorHighlightingToggle?.toggle?.setChecked?.(nextSettings.enableConnectorHighlighting === true);
           this.libraryWindowVisibilityToggle?.toggle?.setChecked?.(nextSettings.showLibraryWindowInToolbar === true);
+          this.projectDataPanelVisibilityToggle?.toggle?.setChecked?.(nextSettings.showProjectDataWindowInToolbar === true);
           this.logWindowVisibilityToggle?.toggle?.setChecked?.(nextSettings.showLogWindowInToolbar === true);
           this.cliWindowVisibilityToggle?.toggle?.setChecked?.(nextSettings.showCliWindowInToolbar === true);
           this.controlPanelsWindowVisibilityToggle?.toggle?.setChecked?.(nextSettings.showControlPanelsWindowInToolbar === true);
           this.workspaceSelectorVisibilityToggle?.toggle?.setChecked?.(nextSettings.showWorkspaceSelector === true);
-          this.workspaceAddButtonVisibilityToggle?.toggle?.setChecked?.(nextSettings.showAddWorkspaceButton === true);
+          this.syncProjectDataPanelVisibility(nextSettings);
           this.syncToolbarFeatureVisibility(nextSettings);
           const themeMode = this.applyThemeMode(nextSettings.themeMode);
           const interfaceScale = Workspace.normalizeInterfaceScaleValue(nextSettings.interfaceScale);
           Panel.setUiScale(interfaceScale);
           this.themeModeSetting?.setValue?.(themeMode);
           this.interfaceScaleSetting?.setValue?.(interfaceScale);
+      }
+  
+      isProjectDataPanelEnabled(settings = null) {
+          const nextSettings = AppSettings.normalizeSettings(
+              settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
+          );
+          return nextSettings.showProjectDataWindowInToolbar === true;
+      }
+  
+      syncProjectDataPanelVisibility(settings = null) {
+          if (!this.projectDataPersistenceCard?.element) return;
+          this.projectDataPersistenceCard.element.hidden = this.isProjectDataPanelEnabled(settings) !== true;
       }
   
       syncProjectDisplaySettingsUi(settings = null) {
@@ -23159,6 +23313,19 @@
           }
       }
   
+      parseCreateToolbarDragData(payloadText) {
+          try {
+              const payload = JSON.parse(payloadText);
+              const type = typeof payload?.type === 'string'
+                  ? payload.type.trim()
+                  : '';
+              if (!['component', 'container', 'text'].includes(type)) return null;
+              return { type };
+          } catch (error) {
+              return null;
+          }
+      }
+  
       handleLibraryTreeDragStart(event, entry) {
           if (entry?.kind !== 'item') return;
           if (!event.dataTransfer) return;
@@ -23177,10 +23344,44 @@
           event.currentTarget?.classList?.add('is-dragging');
       }
   
+      handleCreateToolbarDragStart(event, item) {
+          if (!event.dataTransfer) return;
+          const type = typeof item?.type === 'string' ? item.type.trim() : '';
+          if (!['component', 'container', 'text'].includes(type)) return;
+  
+          const payload = JSON.stringify({ type });
+          event.dataTransfer.effectAllowed = 'copy';
+          event.dataTransfer.setData(this.createItemDragMimeType, payload);
+          event.dataTransfer.setData('text/plain', item?.label ?? 'Create item');
+          event.currentTarget?.classList?.add('is-dragging');
+      }
+  
       handleLibraryTreeDragEnd(target) {
           target?.classList?.remove?.('is-dragging');
           this.libraryCanvasDropDepth = 0;
           this.konvaWorkspace?.getContainerElement?.()?.classList?.remove?.('is-library-drop-target');
+      }
+  
+      handleCreateToolbarDragEnd(target) {
+          target?.classList?.remove?.('is-dragging');
+          this.konvaWorkspace?.getContainerElement?.()?.classList?.remove?.('is-create-drop-target');
+      }
+  
+      handleCreateToolbarDrop(dragData, positionOffset = null) {
+          if (!dragData?.type) return null;
+          this.konvaWorkspace?.setNextSpawnPosition?.(positionOffset);
+  
+          switch (dragData.type) {
+              case 'component':
+                  return this.workspace.addNewBlankComponent();
+              case 'container':
+                  return this.workspace.addNewBlankContainer();
+              case 'text':
+                  return this.workspace.addNewBlankTextItem();
+              default:
+                  this.konvaWorkspace?.setNextSpawnPosition?.(null);
+                  return null;
+          }
       }
   
       handleCopyLibraryItemToLibrary(dragData, targetLibraryId) {
@@ -26112,6 +26313,7 @@
               variant: 'code',
               dockIconText: ButtonSymbols.code,
               persistenceId: 'workspace:code',
+              defaultDockSide: 'right',
               width: 640,
               height: 420,
               resizable: true,
@@ -26140,6 +26342,8 @@
               }
               this.clearSelection('Select a component to edit its code.');
           });
+  
+          this.panel.dockTo('right');
       }
   
       setComponent(component) {
@@ -30233,6 +30437,12 @@
       box-shadow: inset 0 0 0 3px rgba(15, 118, 110, 0.34);
     }
 
+    #container.is-create-drop-target {
+      box-shadow:
+        inset 0 0 0 3px rgba(37, 99, 235, 0.34),
+        inset 0 0 0 12px rgba(37, 99, 235, 0.06);
+    }
+
     #container > div,
     #container canvas {
       touch-action: none;
@@ -31027,6 +31237,83 @@
       white-space: nowrap;
       letter-spacing: 0;
       color: var(--panel-text);
+    }
+
+    .dp-toolbar-btn-create {
+      position: relative;
+      min-width: 122px;
+      min-height: 58px;
+      padding: 10px 34px 10px 12px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      column-gap: 10px;
+      row-gap: 2px;
+      align-items: center;
+      justify-items: start;
+      text-align: left;
+      cursor: grab;
+      border-style: dashed;
+      border-width: 1.5px;
+    }
+
+    .dp-toolbar-btn-create:hover {
+      box-shadow: var(--panel-hover-shadow);
+      transform: translateY(-1px);
+    }
+
+    .dp-toolbar-btn-create:active {
+      cursor: grabbing;
+      transform: translateY(0);
+    }
+
+    .dp-toolbar-btn-create.is-dragging {
+      opacity: 0.78;
+      box-shadow: var(--panel-hover-shadow);
+    }
+
+    .dp-toolbar-btn-icon {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      font-size: 18px;
+      color: var(--panel-accent);
+    }
+
+    .dp-toolbar-btn-text {
+      grid-column: 2;
+      grid-row: 1;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--panel-text);
+      line-height: 1.1;
+    }
+
+    .dp-toolbar-btn-cue {
+      grid-column: 2;
+      grid-row: 2;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--panel-muted);
+      line-height: 1.1;
+    }
+
+    .dp-toolbar-btn-grip {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 11px;
+      line-height: 0.8;
+      letter-spacing: -1px;
+      color: var(--panel-muted);
+      opacity: 0.9;
+      pointer-events: none;
     }
 
     .dp-toolbar-btn.is-active {
@@ -33310,6 +33597,16 @@
 
       .dp-topbar-group {
         flex-wrap: wrap;
+      }
+
+      .dp-toolbar-btn-create {
+        min-width: 112px;
+        min-height: 52px;
+        padding-right: 30px;
+      }
+
+      .dp-toolbar-btn-cue {
+        font-size: 9px;
       }
 
       .dp-topbar-group + .dp-topbar-group {
