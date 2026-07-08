@@ -5668,21 +5668,18 @@
       }, this.logger);
   
       const updateDragXFunc = (newWidth) => {
-        const minChildSize = this.getMinSizeForChildren();
-        newWidth = Math.max(newWidth, this.containerStyles.minWidth(), minChildSize.width);
-  
-        this.rect.width(newWidth);
-        this.rectHeader.width(newWidth);
-        const newInternalWidth = this.internalWidth(newWidth);
-        this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
-        this.expandButton.setLocation(this.buttonX(newInternalWidth), this.buttonY());
+        this.setCanvasSize({
+          width: newWidth,
+          height: this.rect.height(),
+        });
         this.konvaWorkspace.ensureAncestorsFit(this);
       };
   
       const updateDragYFunc = (newHeight) => {
-        const minChildSize = this.getMinSizeForChildren();
-        newHeight = Math.max(newHeight, this.containerStyles.minWidth(), minChildSize.height);
-        this.rect.height(newHeight);
+        this.setCanvasSize({
+          width: this.rect.width(),
+          height: newHeight,
+        });
         this.konvaWorkspace.ensureAncestorsFit(this);
       };
   
@@ -5724,21 +5721,281 @@
       };
     }
   
+    getIntrinsicMinSize() {
+      const inset = this.containerStyles.childInset();
+      return {
+        width: this.containerStyles.minWidth(),
+        height: Math.max(
+          this.containerStyles.minWidth(),
+          this.headerHeight + (inset * 2),
+        ),
+      };
+    }
+  
+    getChildLayoutBoundsForSize(size) {
+      const containerPosition = this.getCanvasPosition();
+      const inset = this.containerStyles.childInset();
+      const nextWidth = Number(size?.width);
+      const nextHeight = Number(size?.height);
+      return {
+        x: containerPosition.x + inset,
+        y: containerPosition.y + this.headerHeight + inset,
+        width: Math.max(
+          0,
+          (Number.isFinite(nextWidth) ? nextWidth : this.rect.width()) - inset * 2,
+        ),
+        height: Math.max(
+          0,
+          (Number.isFinite(nextHeight) ? nextHeight : this.rect.height())
+            - this.headerHeight
+            - inset * 2,
+        ),
+      };
+    }
+  
+    getVisibleChildren() {
+      return this.konvaWorkspace.getContainerChildrenUI(this).filter(
+        (child) => child.isHidden?.() !== true,
+      );
+    }
+  
+    getChildBounds(child) {
+      return child.getBodyBounds?.()
+        ?? child.getKonvaElement().getClientRect();
+    }
+  
+    getChildSizing(child) {
+      const bounds = this.getChildBounds(child);
+      const size = child.getCanvasSize?.() ?? {};
+      const isContainerController =
+        typeof child.getIsExpanded === 'function'
+        && size?.expanded
+        && size?.collapsed;
+      const isExpanded = isContainerController
+        ? child.getIsExpanded() === true
+        : false;
+      const activeSize = isContainerController
+        ? (isExpanded ? size.expanded : size.collapsed)
+        : size;
+  
+      return {
+        bounds,
+        size,
+        isContainerController,
+        isExpanded,
+        width: Number.isFinite(activeSize?.width) ? activeSize.width : bounds.width,
+        height: Number.isFinite(activeSize?.height) ? activeSize.height : bounds.height,
+      };
+    }
+  
+    resizeChildAlongAxis(child, axis, targetValue) {
+      if (!Number.isFinite(targetValue)) return false;
+  
+      const currentSizing = this.getChildSizing(child);
+      const currentSize = currentSizing[axis];
+      if (!Number.isFinite(currentSize) || targetValue >= currentSize) {
+        return false;
+      }
+  
+      if (currentSizing.isContainerController) {
+        const nextExpanded = {
+          ...(currentSizing.size.expanded ?? {}),
+        };
+        const nextCollapsed = {
+          ...(currentSizing.size.collapsed ?? {}),
+        };
+        if (currentSizing.isExpanded) {
+          nextExpanded[axis] = targetValue;
+        } else {
+          nextCollapsed[axis] = targetValue;
+        }
+        child.restoreCanvasSize?.({
+          expanded: nextExpanded,
+          collapsed: nextCollapsed,
+        });
+      } else {
+        child.restoreCanvasSize?.({
+          ...(currentSizing.size ?? {}),
+          [axis]: targetValue,
+        });
+      }
+  
+      return this.getChildSizing(child)[axis] < currentSize;
+    }
+  
+    moveChildAlongAxis(child, axis, targetValue) {
+      if (!Number.isFinite(targetValue)) return false;
+  
+      const currentPosition = child.getCanvasPosition?.();
+      if (!currentPosition) return false;
+  
+      const nextX = axis === 'width' ? targetValue : currentPosition.x;
+      const nextY = axis === 'height' ? targetValue : currentPosition.y;
+      if (nextX === currentPosition.x && nextY === currentPosition.y) {
+        return false;
+      }
+  
+      child.restoreCanvasPosition?.(nextX, nextY);
+      return true;
+    }
+  
+    getAxisConfig(axis) {
+      if (axis === 'width') {
+        return {
+          positionKey: 'x',
+          sizeKey: 'width',
+          crossPositionKey: 'y',
+          crossSizeKey: 'height',
+        };
+      }
+  
+      return {
+        positionKey: 'y',
+        sizeKey: 'height',
+        crossPositionKey: 'x',
+        crossSizeKey: 'width',
+      };
+    }
+  
+    rangesOverlap(startA, sizeA, startB, sizeB) {
+      const endA = startA + sizeA;
+      const endB = startB + sizeB;
+      return startA < endB && startB < endA;
+    }
+  
+    shrinkChildrenAlongAxis(axis, targetSize) {
+      if (!Number.isFinite(targetSize)) return;
+  
+      const axisConfig = this.getAxisConfig(axis);
+      let safetyCounter = 0;
+      while (this.getMinSizeForChildren()[axis] > targetSize && safetyCounter < 128) {
+        const overflow = this.getMinSizeForChildren()[axis] - targetSize;
+        const children = this.getVisibleChildren()
+          .map((child) => ({
+            child,
+            bounds: this.getChildBounds(child),
+          }))
+          .sort((left, right) => {
+            const leftEdge =
+              left.bounds[axisConfig.positionKey] + left.bounds[axisConfig.sizeKey];
+            const rightEdge =
+              right.bounds[axisConfig.positionKey] + right.bounds[axisConfig.sizeKey];
+            if (rightEdge !== leftEdge) return rightEdge - leftEdge;
+            return right.bounds[axisConfig.positionKey] - left.bounds[axisConfig.positionKey];
+          });
+  
+        let didShrink = false;
+        for (const entry of children) {
+          const currentSize = this.getChildSizing(entry.child)[axis];
+          if (!Number.isFinite(currentSize)) continue;
+          if (this.resizeChildAlongAxis(entry.child, axis, currentSize - overflow)) {
+            didShrink = true;
+            break;
+          }
+        }
+  
+        if (!didShrink) {
+          break;
+        }
+        safetyCounter++;
+      }
+    }
+  
+    compactChildrenAlongAxis(axis, targetSize) {
+      const axisConfig = this.getAxisConfig(axis);
+      const layoutBounds = this.getChildLayoutBoundsForSize(targetSize);
+      const layoutStart = layoutBounds[axisConfig.positionKey];
+      const placedEntries = [];
+      const children = this.getVisibleChildren()
+        .map((child) => ({
+          child,
+          bounds: this.getChildBounds(child),
+        }))
+        .sort((left, right) => {
+          if (left.bounds[axisConfig.positionKey] !== right.bounds[axisConfig.positionKey]) {
+            return left.bounds[axisConfig.positionKey] - right.bounds[axisConfig.positionKey];
+          }
+          return left.bounds[axisConfig.crossPositionKey] - right.bounds[axisConfig.crossPositionKey];
+        });
+  
+      children.forEach((entry) => {
+        let nextPosition = layoutStart;
+        placedEntries.forEach((placedEntry) => {
+          if (!this.rangesOverlap(
+            entry.bounds[axisConfig.crossPositionKey],
+            entry.bounds[axisConfig.crossSizeKey],
+            placedEntry.bounds[axisConfig.crossPositionKey],
+            placedEntry.bounds[axisConfig.crossSizeKey],
+          )) {
+            return;
+          }
+  
+          nextPosition = Math.max(
+            nextPosition,
+            placedEntry.bounds[axisConfig.positionKey] + placedEntry.bounds[axisConfig.sizeKey],
+          );
+        });
+  
+        this.moveChildAlongAxis(entry.child, axis, nextPosition);
+        placedEntries.push({
+          bounds: this.getChildBounds(entry.child),
+        });
+      });
+    }
+  
+    reflowChildrenToFit(size) {
+      const nextWidth = Number(size?.width);
+      if (Number.isFinite(nextWidth) && nextWidth < this.getMinSizeForChildren().width) {
+        this.shrinkChildrenAlongAxis('width', nextWidth);
+        if (this.getMinSizeForChildren().width > nextWidth) {
+          this.compactChildrenAlongAxis('width', size);
+        }
+      }
+  
+      const nextHeight = Number(size?.height);
+      if (Number.isFinite(nextHeight) && nextHeight < this.getMinSizeForChildren().height) {
+        this.shrinkChildrenAlongAxis('height', nextHeight);
+        if (this.getMinSizeForChildren().height > nextHeight) {
+          this.compactChildrenAlongAxis('height', size);
+        }
+      }
+    }
+  
     setCanvasSize(size) {
       if (!size) return;
-      const minChildSize = this.getMinSizeForChildren();
+      const intrinsicMinSize = this.getIntrinsicMinSize();
       let nextWidth = this.konvaWorkspace.resolveItemSizeValue(size.width);
       if (!Number.isFinite(nextWidth)) nextWidth = this.rect.width();
       nextWidth = Math.max(
         nextWidth,
-        this.containerStyles.minWidth(),
-        minChildSize.width,
+        intrinsicMinSize.width,
       );
       let nextHeight = this.konvaWorkspace.resolveItemSizeValue(size.height);
       if (!Number.isFinite(nextHeight)) nextHeight = this.rect.height();
       nextHeight = Math.max(
         nextHeight,
-        this.containerStyles.minWidth(),
+        intrinsicMinSize.height,
+      );
+  
+      if (
+        nextWidth < this.getMinSizeForChildren().width
+        || nextHeight < this.getMinSizeForChildren().height
+      ) {
+        this.reflowChildrenToFit({
+          width: nextWidth,
+          height: nextHeight,
+        });
+      }
+  
+      const minChildSize = this.getMinSizeForChildren();
+      nextWidth = Math.max(
+        nextWidth,
+        intrinsicMinSize.width,
+        minChildSize.width,
+      );
+      nextHeight = Math.max(
+        nextHeight,
+        intrinsicMinSize.height,
         minChildSize.height,
       );
   
@@ -5753,15 +6010,16 @@
     }
   
     resizeToFitChildren() {
+      const intrinsicMinSize = this.getIntrinsicMinSize();
       const minChildSize = this.getMinSizeForChildren();
       const nextWidth = Math.max(
         this.rect.width(),
-        this.containerStyles.minWidth(),
+        intrinsicMinSize.width,
         minChildSize.width,
       );
       const nextHeight = Math.max(
         this.rect.height(),
-        this.containerStyles.minWidth(),
+        intrinsicMinSize.height,
         minChildSize.height,
       );
   
@@ -5826,14 +6084,10 @@
     }
   
     getChildLayoutBounds() {
-      const containerPosition = this.getCanvasPosition();
-      const inset = this.containerStyles.childInset();
-      return {
-        x: containerPosition.x + inset,
-        y: containerPosition.y + this.headerHeight + inset,
-        width: Math.max(0, this.rect.width() - inset * 2),
-        height: Math.max(0, this.rect.height() - this.headerHeight - inset * 2),
-      };
+      return this.getChildLayoutBoundsForSize({
+        width: this.rect.width(),
+        height: this.rect.height(),
+      });
     }
   
     moveToTop() {
@@ -6015,7 +6269,6 @@
       } else {
         this.isExpanded = true;
         this.expandContainer();
-        this.selectContainer();
       }
     }
   
@@ -25792,6 +26045,12 @@
           return searchShell;
       }
   
+      createComponentViewInspectorSearchShell(inspectorSections, emptyState) {
+          const searchShell = this.createComponentInspectorSearchShell(inspectorSections, emptyState);
+          searchShell.classList.add('dp-component-inspector-search-shell');
+          return searchShell;
+      }
+  
       createInspectorSelectField(labelText, className, options, initialValue, onChange) {
           const field = this.panelHelper.createElement('div', 'dp-control-design-field');
           const label = this.panelHelper.createElement('div', 'dp-control-design-field-label');
@@ -26304,7 +26563,7 @@
   
       renderComponentDesignMode(component, actions) {
           const { content: componentContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Component');
-          const componentControls = this.panelHelper.createElement('div', 'dp-inline-actions', 'component-controls');
+          const componentControls = this.panelHelper.createElement('div', 'dp-inline-actions dp-component-quick-actions', 'component-controls');
           const componentName = this.panelHelper.createInput(component.name, (value) => {
               component.setName(value);
           });
@@ -26314,10 +26573,9 @@
           componentControls.appendChild(actions.addChannel);
           componentControls.appendChild(actions.addTimer);
           componentControls.appendChild(actions.addTrigger);
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Quick Actions'));
-          inspectorCard.body.appendChild(componentControls);
           inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
           inspectorCard.body.appendChild(componentName.element);
+          inspectorCard.body.appendChild(componentControls);
   
           this.AppendSection(component.getChannels().length, 'Channels', inspectorSections, (body) => {
               this.AddChannels(component, body, (channel) => component.deleteConnectable(channel));
@@ -26335,7 +26593,7 @@
           searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
           searchEmptyState.hidden = true;
           inspectorSections.appendChild(searchEmptyState);
-          componentContent.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
+          inspectorCard.body.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
           inspectorCard.body.appendChild(inspectorSections);
           componentContent.appendChild(inspectorCard.element);
           this.applyInspectorSearch(inspectorSections, searchEmptyState);
@@ -26381,7 +26639,7 @@
           searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
           searchEmptyState.hidden = true;
           inspectorSections.appendChild(searchEmptyState);
-          componentContent.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
+          inspectorCard.body.appendChild(this.createComponentViewInspectorSearchShell(inspectorSections, searchEmptyState));
           inspectorCard.body.appendChild(inspectorSections);
           componentContent.appendChild(inspectorCard.element);
           this.applyInspectorSearch(inspectorSections, searchEmptyState);
@@ -26858,9 +27116,7 @@
           toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
           toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} ${title}`);
           toggle.title = `${isExpanded ? 'Collapse' : 'Expand'} ${title}`;
-          toggle.addEventListener('click', (event) => {
-              event.preventDefault();
-              event.stopPropagation();
+          const applyToggleState = () => {
               const nextCollapsed = this.toggleInspectorSectionCollapsed(sectionOwner, title);
               const nextExpanded = nextCollapsed !== true;
               section.classList.toggle('is-collapsed', nextCollapsed);
@@ -26869,6 +27125,16 @@
               toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
               toggle.setAttribute('aria-label', `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`);
               toggle.title = `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`;
+          };
+          toggle.addEventListener('click', (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              applyToggleState();
+          });
+          header.addEventListener('click', (event) => {
+              if (event.target instanceof HTMLButtonElement) return;
+              event.preventDefault();
+              applyToggleState();
           });
   
           section.classList.toggle('is-collapsed', !isExpanded);
@@ -33060,10 +33326,18 @@
       margin-top: 0;
     }
 
+    .dp-section-body > .dp-section-title + :is(.dp-input, .dp-load-textarea, .dp-inline-actions, .dp-inspector-search-shell, .dp-control-design-field, .dp-labeled-input) {
+      margin-top: 8px;
+    }
+
     .dp-inline-actions {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+    }
+
+    .dp-component-quick-actions {
+      margin: 14px 0;
     }
 
     .dp-library-panel-actions {
@@ -33958,7 +34232,11 @@
     .dp-inspector-search-shell {
       display: flex;
       flex: 0 0 auto;
-      padding: 0 2px 0 0;
+      padding: 0 2px 10px 0;
+    }
+
+    .dp-component-inspector-search-shell {
+      margin-top: 14px;
     }
 
     .dp-inspector-search-input {
@@ -33968,7 +34246,7 @@
     .dp-inspector-section {
       display: flex;
       flex-direction: column;
-      gap: 0;
+      gap: 8px;
     }
 
     .dp-inspector-section-header {
@@ -33976,10 +34254,15 @@
       align-items: center;
       gap: 2px;
       min-width: 0;
+      cursor: pointer;
     }
 
     .dp-inspector-section-header .dp-section-title {
       margin-top: 0;
+    }
+
+    .dp-inspector-section-header + .dp-inspector-section-content {
+      margin-top: 6px;
     }
 
     .dp-inspector-section-toggle {
@@ -34027,7 +34310,7 @@
     }
 
     .dp-scroll-section > .dp-inspector-section {
-      margin-top: 14px;
+      margin-top: 0;
       padding-top: 14px;
       border-top: 1px solid var(--panel-line);
     }
@@ -34561,7 +34844,7 @@
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
 
     .dp-control-design-field-label {
