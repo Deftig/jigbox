@@ -181,6 +181,22 @@
     static themeModeOptions = Object.freeze(['default', 'dark']);
     static nextAppSettingsListenerId = 1;
   
+    static t(key, fallback, params = {}) {
+      return globalThis.DoublePhiI18n?.t?.(key, params) ?? fallback;
+    }
+  
+    static getDefaultComponentName() {
+      return Workspace.t('workspace.defaultComponentName', 'New Component');
+    }
+  
+    static getDefaultContainerName() {
+      return Workspace.t('workspace.defaultContainerName', 'New Container');
+    }
+  
+    static getDefaultControlPanelBaseName() {
+      return Workspace.t('workspace.defaultControlPanelBaseName', 'Panel');
+    }
+  
     items = [];
     selectedItems = [];
     controlPanels = [];
@@ -341,7 +357,7 @@
     addNewComponent(name = null) {
       const normalizedName = typeof name === 'string' && name.trim()
         ? name.trim()
-        : 'New Component';
+        : Workspace.getDefaultComponentName();
       const component = new Component(normalizedName, this.getWorkspaceUniqueId(), this.logger);
       this.addComponent(component);
       return component;
@@ -354,7 +370,7 @@
     addNewContainer(name = null) {
       const normalizedName = typeof name === 'string' && name.trim()
         ? name.trim()
-        : 'New Container';
+        : Workspace.getDefaultContainerName();
       const container = new Container(normalizedName, this.getWorkspaceUniqueId(), this.logger);
       this.addContainer(container);
       return container;
@@ -377,7 +393,7 @@
     addNewTextItem(name = null) {
       const normalizedName = typeof name === 'string' && name.trim()
         ? name.trim()
-        : TextItem.defaultName;
+        : TextItem.getDefaultName();
       const textItem = new TextItem(normalizedName, this.getWorkspaceUniqueId(), this.logger);
       return this.addTextItem(textItem);
     }
@@ -415,11 +431,12 @@
     }
   
     buildDefaultControlPanelName() {
+      const panelBaseName = Workspace.getDefaultControlPanelBaseName();
       let index = 1;
-      let nextName = `Panel ${index}`;
+      let nextName = `${panelBaseName} ${index}`;
       while (this.controlPanels.some((controlPanel) => controlPanel.name === nextName)) {
         index++;
-        nextName = `Panel ${index}`;
+        nextName = `${panelBaseName} ${index}`;
       }
       return nextName;
     }
@@ -1570,6 +1587,397 @@
     }
   }
   </script>
+  <!-- inlined from ./lib/I18n.js -->
+  <script>
+  class DoublePhiI18nService {
+  
+    constructor() {
+      this.defaultLanguage = 'en';
+      this.supportedLanguages = ['en', 'de'];
+      this.languageLocales = Object.freeze({
+        en: 'en-US',
+        de: 'de-DE',
+      });
+      this.catalog = Object.freeze({
+        en: Object.freeze({
+          'app.title': 'Jigbox',
+          'settings.language': 'Language',
+          'settings.languageDescription': 'Choose the interface language used across settings, startup, and the main workspace windows.',
+          'settings.languageSelectAria': 'Choose interface language',
+          'settings.display': 'Display',
+          'settings.theme': 'Theme',
+          'settings.themeDescription': 'Choose between the default window styling and a darker command-line inspired theme.',
+          'settings.interfaceSize': 'Interface Size',
+          'settings.interfaceSizeDescription': 'Scale toolbars, windows, and form controls without affecting the canvas workspace.',
+          'settings.startup': 'Startup',
+          'settings.openingPage': 'Opening Page',
+          'settings.openingPageDescription': 'Show the welcome screen with quick-start project choices each time the app loads.',
+          'settings.canvas': 'Canvas',
+          'settings.gridSnapping': 'Grid Snapping',
+          'settings.gridSnappingDescription': 'Snap dragging and resizing to half-grid steps (20px). Disabled by default.',
+          'settings.highlighting': 'Highlighting',
+          'settings.componentHighlighting': 'Component and Container Highlighting',
+          'settings.componentHighlightingDescription': 'Show packet-activity highlighting for components, containers, properties, channels, and their connections.',
+          'settings.connectorHighlighting': 'Connector Highlighting',
+          'settings.connectorHighlightingDescription': 'Show connector hover and preview highlighting while wiring channels and properties together.',
+          'settings.featureGates': 'Feature Gates',
+          'settings.libraryWindow': 'Library Window',
+          'settings.libraryWindowDescription': 'Show the Library window button in the toolbar menu.',
+          'settings.projectDataPanel': 'Project Data Panel',
+          'settings.projectDataPanelDescription': 'Show the Project Data save and load section inside the Persistence window.',
+          'settings.logWindow': 'Log Window',
+          'settings.logWindowDescription': 'Show the Log window button in the toolbar menu.',
+          'settings.cliWindow': 'CLI Window',
+          'settings.cliWindowDescription': 'Show the CLI window button in the toolbar menu.',
+          'settings.controlPanelsWindow': 'Control Panels Window',
+          'settings.controlPanelsWindowDescription': 'Show the Control Panels window button in the toolbar menu.',
+          'settings.workspaceSelector': 'Workspace Selector',
+          'settings.workspaceSelectorDescription': 'Show the workspace selector and add workspace button in the toolbar.',
+          'settings.themeDefault': 'Default',
+          'settings.themeDark': 'Dark',
+          'settings.interfaceLarge': 'Large',
+          'settings.interfaceMedium': 'Medium',
+          'settings.interfaceSmall': 'Small',
+          'settings.custom': 'Custom',
+          'settings.interfacePercent': '{label} ({percent}%)',
+          'settings.languageAria': '{label} interface language',
+          'settings.themeAria': '{label} interface theme',
+          'settings.interfaceSizeAria': '{label} interface size',
+          'panel.application': 'Application',
+          'panel.project': 'Project',
+          'panel.workspace': 'Workspace',
+          'panel.settings': 'Settings',
+          'panel.library': 'Library',
+          'panel.persistence': 'Persistence',
+          'panel.help': 'Help',
+          'project.defaultName': 'Untitled Project',
+          'project.defaultWorkspaceBaseName': 'Workspace',
+          'project.defaultLibraryBaseName': 'Project Library',
+          'project.defaultLibraryEntryBaseName': 'Library Entry',
+          'workspace.defaultComponentName': 'New Component',
+          'workspace.defaultContainerName': 'New Container',
+          'workspace.defaultTextItemName': 'New Text',
+          'workspace.defaultControlPanelBaseName': 'Panel',
+          'text.emptyPlaceholder': 'Edit text in inspector',
+          'library.projectLibraries': 'Project Libraries',
+          'library.savedLibraries': 'Saved Libraries',
+          'library.searchPlaceholder': '⌕ Search libraries, components, containers, and text',
+          'library.addLibrary': 'Add Library',
+          'library.addLibraryTooltip': 'Add library',
+          'library.addSelected': 'Add selected to Library',
+          'library.addFromFile': 'Add From File',
+          'library.collapseAll': 'Collapse all',
+          'library.collapseAllTooltip': 'Collapse all library groups',
+          'library.savedLibrariesDescription': 'Import a library from file, or reuse libraries already saved in this browser.',
+          'persistence.projectData': 'Project Data',
+          'persistence.save': 'Save',
+          'persistence.download': 'Download',
+          'persistence.load': 'Load',
+          'persistence.pastePlaceholder': 'Paste saved project JSON here, or drop a .json file anywhere on the canvas.',
+          'persistence.ready': 'Ready.',
+          'persistence.saveCurrentProject': 'Save Current Project',
+          'persistence.browserStorageUnavailable': 'Browser storage is unavailable in this session.',
+          'persistence.savedProjectsEmpty': 'Projects saved in this browser will appear here.',
+          'persistence.savedLibrariesEmpty': 'Libraries saved from this project will appear here.',
+          'help.filterPlaceholder': '⌕ Filter help by keyword',
+          'help.noMatches': 'No help sections match that filter.',
+          'toolbar.persistence': 'Persistence',
+          'toolbar.projectWorkspace': 'Project and workspace',
+          'toolbar.execution': 'Execution',
+          'toolbar.create': 'Create',
+          'toolbar.windows': 'Windows',
+          'toolbar.help': 'Help',
+          'toolbar.openPersistence': 'Open persistence window',
+          'toolbar.openSettings': 'Open settings window',
+          'toolbar.openNavigator': 'Open navigator window',
+          'toolbar.switchWorkspace': 'Switch workspace',
+          'toolbar.addWorkspace': 'Add workspace',
+          'toolbar.openLibrary': 'Open library window',
+          'toolbar.stopExecution': 'Stop execution',
+          'toolbar.pauseExecution': 'Pause execution',
+          'toolbar.startExecution': 'Start execution',
+          'toolbar.restartExecution': 'Restart execution',
+          'toolbar.addComponent': 'Add component',
+          'toolbar.component': 'Component',
+          'toolbar.addContainer': 'Add container',
+          'toolbar.container': 'Container',
+          'toolbar.addTextItem': 'Add text item',
+          'toolbar.text': 'Text',
+          'toolbar.openCode': 'Open code window',
+          'toolbar.openInspector': 'Open inspector window',
+          'toolbar.openLog': 'Open log window',
+          'toolbar.openControlPanels': 'Open control panels list',
+          'toolbar.toggleCommandLine': 'Toggle command line',
+          'toolbar.openHelp': 'Open help window',
+          'toolbar.dragToCanvas': '{tooltip} or drag to canvas',
+          'status.loadedFile': 'Loaded {name}.',
+          'status.fileLoadFailed': 'File load failed.',
+          'status.savedProjectToClipboard': 'Saved project to clipboard.',
+          'status.saveFailed': 'Save failed.',
+          'status.downloadedProjectFile': 'Downloaded project file.',
+          'status.downloadFailed': 'Download failed.',
+          'status.loadedProject': 'Loaded project.',
+          'status.loadFailed': 'Load failed.',
+          'status.loadedSavedProject': 'Loaded saved project {name}.',
+          'status.savedProjectToBrowser': 'Saved "{name}" to this browser.',
+          'status.savedLibraryFromFile': 'Saved library "{libraryName}" to this browser from {fileName}.',
+          'status.libraryFileImportFailed': 'Library file import failed.',
+          'status.browserSaveFailed': 'Browser save failed.',
+          'status.switchedWorkspace': 'Switched to {name}.',
+          'status.workspaceSwitchFailed': 'Workspace switch failed.',
+          'status.createdWorkspace': 'Created {name}.',
+          'status.workspaceCreationFailed': 'Workspace creation failed.',
+          'status.resetWindows': 'Reset windows for the active workspace.',
+          'status.windowResetFailed': 'Window reset failed.',
+          'status.selectLibraryFirst': 'Select a library first.',
+          'status.copiedLlmImportPrompt': 'Copied LLM import prompt to clipboard.',
+          'status.copyLlmImportPromptFailed': 'Copy import prompt failed.',
+          'status.loadedCompactHelpDemo': 'Loaded compact help demo workspace. Press Start to watch the timer drive messages.',
+          'status.compactHelpDemoLoadFailed': 'Compact help demo load failed.',
+          'summary.workspacesInProject': '{count} workspace{suffix} in project.',
+          'summary.savedCount': '{count} saved',
+          'summary.workspaceCount': '{count} workspace{suffix}',
+          'summary.savedAt': 'Saved {value}',
+          'summary.recently': 'recently',
+          'startup.welcomeEyebrow': 'Welcome to Jigbox',
+          'startup.title': 'Mock up Systems, play with Ideas.',
+          'startup.description': 'Start with a blank canvas, open the demo model, or jump back into a project stored in this browser.',
+          'startup.freshStart': 'Fresh Start',
+          'startup.startDefaultProject': 'Start with Default Project',
+          'startup.startDefaultDescription': 'Open the clean project and begin building right away.',
+          'startup.openBlankWorkspace': 'Open Blank Workspace',
+          'startup.guidedDemo': 'Guided Demo',
+          'startup.openDemoProject': 'Open Demo Project',
+          'startup.openDemoDescription': 'Load the sample Model, hit start and explore the components and their code.',
+          'startup.openDemo': 'Open Demo',
+          'startup.savedProjectsEyebrow': 'Saved Projects',
+          'startup.savedProjectsTitle': 'Resume a browser-saved project',
+          'startup.savedProjectsDescription': 'These projects were persisted in this browser and are ready to reopen.',
+          'startup.disableIntro': 'Do not show this intro page on startup',
+          'startup.emptyState': 'No persisted browser projects yet. Save one from the Persistence window and it will appear here next time.',
+          'startup.untitledProject': 'Untitled Project',
+          'startup.savedProjectLoadFailed': 'Saved project load failed.',
+          'sample.projectName': 'Untitled Project',
+          'sample.workspaceName': 'Workspace 1',
+          'sample.demoWorkspaceName': 'Compact Help Demo',
+          'sample.libraryName': 'Project Library',
+          'sample.controlPanelName': 'Demo Controls',
+          'sample.textItemName': 'Demo Notes',
+          'sample.textNotes': 'Press Start to watch sampleTick send readings into Status Display.\nMove Operator Panel.targetTemp to watch property propagation.\nUse Demo Controls to fire sendTestAlert for a manual channel message.\nCollapse Cooling Cell to see targetTemp promoted on the container shell.\nAll windows are dockable\nThe Cooling Cell Container can be collapsed to hide its content\n{ } Open the code window to see how messages are sent and received\n⌕ Use the inspector to view and edit items and inspect packet content',
+          'language.en': 'English',
+          'language.de': 'Deutsch',
+        }),
+        de: Object.freeze({
+          'app.title': 'Jigbox',
+          'settings.language': 'Sprache',
+          'settings.languageDescription': 'Wahle die Oberflachensprache fur Einstellungen, Startseite und die wichtigsten Arbeitsfenster.',
+          'settings.languageSelectAria': 'Oberflachensprache auswahlen',
+          'settings.display': 'Anzeige',
+          'settings.theme': 'Design',
+          'settings.themeDescription': 'Wahle zwischen dem Standardstil der Fenster und einem dunkleren, terminalinspirierten Design.',
+          'settings.interfaceSize': 'Oberflachengrosse',
+          'settings.interfaceSizeDescription': 'Skaliert Symbolleisten, Fenster und Formulare, ohne die Zeichenflache zu verandern.',
+          'settings.startup': 'Start',
+          'settings.openingPage': 'Startseite',
+          'settings.openingPageDescription': 'Zeigt beim Laden der App die Willkommensseite mit Schnellstart-Optionen an.',
+          'settings.canvas': 'Zeichenflache',
+          'settings.gridSnapping': 'Rastereinrastung',
+          'settings.gridSnappingDescription': 'Richtet Ziehen und Grossenanderung an halben Rasterstufen (20 px) aus. Standardmassig deaktiviert.',
+          'settings.highlighting': 'Hervorhebung',
+          'settings.componentHighlighting': 'Komponenten- und Container-Hervorhebung',
+          'settings.componentHighlightingDescription': 'Zeigt Aktivitatshervorhebung fur Komponenten, Container, Eigenschaften, Kanale und ihre Verbindungen an.',
+          'settings.connectorHighlighting': 'Verbinder-Hervorhebung',
+          'settings.connectorHighlightingDescription': 'Zeigt Hover- und Vorschau-Hervorhebungen beim Verbinden von Kanalen und Eigenschaften an.',
+          'settings.featureGates': 'Funktionsschalter',
+          'settings.libraryWindow': 'Bibliotheksfenster',
+          'settings.libraryWindowDescription': 'Zeigt die Schaltflache fur das Bibliotheksfenster in der Symbolleiste an.',
+          'settings.projectDataPanel': 'Projektdaten-Bereich',
+          'settings.projectDataPanelDescription': 'Zeigt den Speichern-/Laden-Bereich fur Projektdaten im Persistenzfenster an.',
+          'settings.logWindow': 'Log-Fenster',
+          'settings.logWindowDescription': 'Zeigt die Schaltflache fur das Log-Fenster in der Symbolleiste an.',
+          'settings.cliWindow': 'CLI-Fenster',
+          'settings.cliWindowDescription': 'Zeigt die Schaltflache fur das CLI-Fenster in der Symbolleiste an.',
+          'settings.controlPanelsWindow': 'Control-Panels-Fenster',
+          'settings.controlPanelsWindowDescription': 'Zeigt die Schaltflache fur das Control-Panels-Fenster in der Symbolleiste an.',
+          'settings.workspaceSelector': 'Workspace-Auswahl',
+          'settings.workspaceSelectorDescription': 'Zeigt die Workspace-Auswahl und die Schaltflache zum Hinzufugen an.',
+          'settings.themeDefault': 'Standard',
+          'settings.themeDark': 'Dunkel',
+          'settings.interfaceLarge': 'Gross',
+          'settings.interfaceMedium': 'Mittel',
+          'settings.interfaceSmall': 'Klein',
+          'settings.custom': 'Benutzerdefiniert',
+          'settings.interfacePercent': '{label} ({percent}%)',
+          'settings.languageAria': '{label} Oberflachensprache',
+          'settings.themeAria': '{label} Oberflachendesign',
+          'settings.interfaceSizeAria': '{label} Oberflachengrosse',
+          'panel.application': 'Anwendung',
+          'panel.project': 'Projekt',
+          'panel.workspace': 'Workspace',
+          'panel.settings': 'Einstellungen',
+          'panel.library': 'Bibliothek',
+          'panel.persistence': 'Persistenz',
+          'panel.help': 'Hilfe',
+          'project.defaultName': 'Unbenanntes Projekt',
+          'project.defaultWorkspaceBaseName': 'Workspace',
+          'project.defaultLibraryBaseName': 'Projektbibliothek',
+          'project.defaultLibraryEntryBaseName': 'Bibliothekseintrag',
+          'workspace.defaultComponentName': 'Neue Komponente',
+          'workspace.defaultContainerName': 'Neuer Container',
+          'workspace.defaultTextItemName': 'Neuer Text',
+          'workspace.defaultControlPanelBaseName': 'Panel',
+          'text.emptyPlaceholder': 'Text im Inspektor bearbeiten',
+          'library.projectLibraries': 'Projektbibliotheken',
+          'library.savedLibraries': 'Gespeicherte Bibliotheken',
+          'library.searchPlaceholder': '⌕ Bibliotheken, Komponenten, Container und Text durchsuchen',
+          'library.addLibrary': 'Bibliothek hinzufugen',
+          'library.addLibraryTooltip': 'Bibliothek hinzufugen',
+          'library.addSelected': 'Auswahl zur Bibliothek',
+          'library.addFromFile': 'Aus Datei hinzufugen',
+          'library.collapseAll': 'Alle einklappen',
+          'library.collapseAllTooltip': 'Alle Bibliotheksgruppen einklappen',
+          'library.savedLibrariesDescription': 'Importiere eine Bibliothek aus einer Datei oder verwende bereits in diesem Browser gespeicherte Bibliotheken erneut.',
+          'persistence.projectData': 'Projektdaten',
+          'persistence.save': 'Speichern',
+          'persistence.download': 'Herunterladen',
+          'persistence.load': 'Laden',
+          'persistence.pastePlaceholder': 'Gespeichertes Projekt-JSON hier einfugen oder eine .json-Datei irgendwo auf die Zeichenflache ziehen.',
+          'persistence.ready': 'Bereit.',
+          'persistence.saveCurrentProject': 'Aktuelles Projekt speichern',
+          'persistence.browserStorageUnavailable': 'Browserspeicher ist in dieser Sitzung nicht verfugbar.',
+          'persistence.savedProjectsEmpty': 'In diesem Browser gespeicherte Projekte erscheinen hier.',
+          'persistence.savedLibrariesEmpty': 'Aus diesem Projekt gespeicherte Bibliotheken erscheinen hier.',
+          'help.filterPlaceholder': '⌕ Hilfe nach Stichwort filtern',
+          'help.noMatches': 'Keine Hilfebereiche passen zu diesem Filter.',
+          'toolbar.persistence': 'Persistenz',
+          'toolbar.projectWorkspace': 'Projekt und Workspace',
+          'toolbar.execution': 'Ausfuhrung',
+          'toolbar.create': 'Erstellen',
+          'toolbar.windows': 'Fenster',
+          'toolbar.help': 'Hilfe',
+          'toolbar.openPersistence': 'Persistenzfenster offnen',
+          'toolbar.openSettings': 'Einstellungsfenster offnen',
+          'toolbar.openNavigator': 'Navigatorfenster offnen',
+          'toolbar.switchWorkspace': 'Workspace wechseln',
+          'toolbar.addWorkspace': 'Workspace hinzufugen',
+          'toolbar.openLibrary': 'Bibliotheksfenster offnen',
+          'toolbar.stopExecution': 'Ausfuhrung stoppen',
+          'toolbar.pauseExecution': 'Ausfuhrung pausieren',
+          'toolbar.startExecution': 'Ausfuhrung starten',
+          'toolbar.restartExecution': 'Ausfuhrung neu starten',
+          'toolbar.addComponent': 'Komponente hinzufugen',
+          'toolbar.component': 'Komponente',
+          'toolbar.addContainer': 'Container hinzufugen',
+          'toolbar.container': 'Container',
+          'toolbar.addTextItem': 'Text hinzufugen',
+          'toolbar.text': 'Text',
+          'toolbar.openCode': 'Codefenster offnen',
+          'toolbar.openInspector': 'Inspektorfenster offnen',
+          'toolbar.openLog': 'Log-Fenster offnen',
+          'toolbar.openControlPanels': 'Control-Panels-Liste offnen',
+          'toolbar.toggleCommandLine': 'Befehlszeile umschalten',
+          'toolbar.openHelp': 'Hilfefenster offnen',
+          'toolbar.dragToCanvas': '{tooltip} oder auf die Zeichenflache ziehen',
+          'status.loadedFile': '{name} geladen.',
+          'status.fileLoadFailed': 'Datei konnte nicht geladen werden.',
+          'status.savedProjectToClipboard': 'Projekt in die Zwischenablage gespeichert.',
+          'status.saveFailed': 'Speichern fehlgeschlagen.',
+          'status.downloadedProjectFile': 'Projektdatei heruntergeladen.',
+          'status.downloadFailed': 'Download fehlgeschlagen.',
+          'status.loadedProject': 'Projekt geladen.',
+          'status.loadFailed': 'Laden fehlgeschlagen.',
+          'status.loadedSavedProject': 'Gespeichertes Projekt {name} geladen.',
+          'status.savedProjectToBrowser': '"{name}" in diesem Browser gespeichert.',
+          'status.savedLibraryFromFile': 'Bibliothek "{libraryName}" aus {fileName} in diesem Browser gespeichert.',
+          'status.libraryFileImportFailed': 'Import der Bibliotheksdatei fehlgeschlagen.',
+          'status.browserSaveFailed': 'Speichern im Browser fehlgeschlagen.',
+          'status.switchedWorkspace': 'Zu {name} gewechselt.',
+          'status.workspaceSwitchFailed': 'Workspace-Wechsel fehlgeschlagen.',
+          'status.createdWorkspace': '{name} erstellt.',
+          'status.workspaceCreationFailed': 'Workspace-Erstellung fehlgeschlagen.',
+          'status.resetWindows': 'Fenster fur den aktiven Workspace zuruckgesetzt.',
+          'status.windowResetFailed': 'Fenster konnten nicht zuruckgesetzt werden.',
+          'status.selectLibraryFirst': 'Wahle zuerst eine Bibliothek aus.',
+          'status.copiedLlmImportPrompt': 'LLM-Importprompt in die Zwischenablage kopiert.',
+          'status.copyLlmImportPromptFailed': 'Importprompt konnte nicht kopiert werden.',
+          'status.loadedCompactHelpDemo': 'Kompakter Hilfe-Demo-Workspace geladen. Drucke Start, um zu sehen, wie der Timer Nachrichten auslost.',
+          'status.compactHelpDemoLoadFailed': 'Kompakte Hilfe-Demo konnte nicht geladen werden.',
+          'summary.workspacesInProject': '{count} Workspace{suffix} im Projekt.',
+          'summary.savedCount': '{count} gespeichert',
+          'summary.workspaceCount': '{count} Workspace{suffix}',
+          'summary.savedAt': 'Gespeichert {value}',
+          'summary.recently': 'gerade eben',
+          'startup.welcomeEyebrow': 'Willkommen bei Jigbox',
+          'startup.title': 'Systeme entwerfen, Ideen ausprobieren.',
+          'startup.description': 'Beginne mit einer leeren Flache, offne das Demo-Modell oder steige wieder in ein in diesem Browser gespeichertes Projekt ein.',
+          'startup.freshStart': 'Neustart',
+          'startup.startDefaultProject': 'Mit Standardprojekt starten',
+          'startup.startDefaultDescription': 'Offne das saubere Projekt und lege sofort los.',
+          'startup.openBlankWorkspace': 'Leeren Workspace offnen',
+          'startup.guidedDemo': 'Gefuhrte Demo',
+          'startup.openDemoProject': 'Demo-Projekt offnen',
+          'startup.openDemoDescription': 'Lade das Beispielmodell, starte es und erkunde die Komponenten und ihren Code.',
+          'startup.openDemo': 'Demo offnen',
+          'startup.savedProjectsEyebrow': 'Gespeicherte Projekte',
+          'startup.savedProjectsTitle': 'Ein im Browser gespeichertes Projekt fortsetzen',
+          'startup.savedProjectsDescription': 'Diese Projekte wurden in diesem Browser gespeichert und konnen direkt wieder geoffnet werden.',
+          'startup.disableIntro': 'Diese Startseite beim Start nicht anzeigen',
+          'startup.emptyState': 'Noch keine im Browser gespeicherten Projekte. Speichere eines im Persistenzfenster, dann erscheint es beim nachsten Mal hier.',
+          'startup.untitledProject': 'Unbenanntes Projekt',
+          'startup.savedProjectLoadFailed': 'Gespeichertes Projekt konnte nicht geladen werden.',
+          'sample.projectName': 'Unbenanntes Projekt',
+          'sample.workspaceName': 'Workspace 1',
+          'sample.demoWorkspaceName': 'Kompakte Hilfe-Demo',
+          'sample.libraryName': 'Projektbibliothek',
+          'sample.controlPanelName': 'Demo-Steuerung',
+          'sample.textItemName': 'Demo-Hinweise',
+          'sample.textNotes': 'Drucke Start, um zu sehen, wie sampleTick Messwerte an Status Display sendet.\nBewege Operator Panel.targetTemp, um die Eigenschaftsweitergabe zu beobachten.\nNutze Demo Controls, um sendTestAlert fur eine manuelle Kanalmeldung auszulosen.\nKlappe Cooling Cell ein, um zu sehen, wie targetTemp auf der Containerhulle erscheint.\nAlle Fenster sind andockbar\nDer Cooling-Cell-Container kann eingeklappt werden, um seinen Inhalt zu verbergen\n{ } Offne das Codefenster, um zu sehen, wie Nachrichten gesendet und empfangen werden\n⌕ Nutze den Inspektor, um Elemente und Paketinhalte zu betrachten und zu bearbeiten',
+          'language.en': 'English',
+          'language.de': 'Deutsch',
+        }),
+      });
+      this.language = this.defaultLanguage;
+    }
+  
+    normalizeLanguage(language) {
+      const candidate = String(language ?? '').trim().toLowerCase();
+      return this.supportedLanguages.includes(candidate) ? candidate : this.defaultLanguage;
+    }
+  
+    setLanguage(language) {
+      this.language = this.normalizeLanguage(language);
+      return this.language;
+    }
+  
+    getLanguage() {
+      return this.language;
+    }
+  
+    getLocale(language = null) {
+      const normalized = this.normalizeLanguage(language ?? this.language);
+      return this.languageLocales[normalized] ?? this.languageLocales[this.defaultLanguage];
+    }
+  
+    getLanguageOptions() {
+      return this.supportedLanguages.map((language) => ({
+        value: language,
+        label: this.t(`language.${language}`, {}, language),
+      }));
+    }
+  
+    t(key, params = {}, language = null) {
+      const normalizedLanguage = this.normalizeLanguage(language ?? this.language);
+      const template = this.catalog?.[normalizedLanguage]?.[key]
+        ?? this.catalog?.[this.defaultLanguage]?.[key]
+        ?? key;
+      return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+        Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+      ));
+    }
+  }
+  
+  globalThis.DoublePhiI18n = globalThis.DoublePhiI18n ?? new DoublePhiI18nService();
+  </script>
   <!-- inlined from ./lib/AppSettings.js -->
   <script>
   class AppSettings {
@@ -1577,6 +1985,7 @@
     static version = 1;
     static browserPersistenceStorageKey = 'doublephi:app-settings';
     static defaultSettings = Object.freeze({
+      language: 'en',
       themeMode: Workspace.defaultThemeMode,
       interfaceScale: Workspace.defaultInterfaceScale,
       showIntroPageOnStartup: true,
@@ -1616,6 +2025,7 @@
       const showWorkspaceSelector = settings?.showWorkspaceSelector === true
         || settings?.showAddWorkspaceButton === true;
       return {
+        language: globalThis.DoublePhiI18n?.normalizeLanguage?.(settings?.language) ?? 'en',
         themeMode: Workspace.normalizeThemeModeValue(settings?.themeMode),
         interfaceScale: Workspace.normalizeInterfaceScaleValue(settings?.interfaceScale),
         showIntroPageOnStartup: settings?.showIntroPageOnStartup !== false,
@@ -2239,6 +2649,10 @@
     static listStyleNone = 'none';
     static listStyleBulleted = 'bulleted';
     static listStyleNumbered = 'numbered';
+  
+    static getDefaultName() {
+      return globalThis.DoublePhiI18n?.t?.('workspace.defaultTextItemName', {}, null) ?? TextItem.defaultName;
+    }
   
     selected = false;
     parent = null;
@@ -4434,8 +4848,8 @@
       this.updateConnectionPoints();
     }
   
-    setCanvasPosition(x, y) {
-      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
+    setCanvasPosition(x, y, options = {}) {
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }, options) ?? { x, y };
       this.group.position(nextPosition);
       this.updateConnectionPoints();
       this.konvaWorkspace.ensureAncestorsFit(this);
@@ -4460,6 +4874,10 @@
     static bodyFontSize = 14;
     static bodyLineHeight = 1.35;
     static emptyPlaceholderText = 'Edit text in inspector';
+  
+    static getEmptyPlaceholderText() {
+      return globalThis.DoublePhiI18n?.t?.('text.emptyPlaceholder') ?? KonvaTextItem.emptyPlaceholderText;
+    }
   
     #hidden = false;
   
@@ -4507,6 +4925,14 @@
       this.konvaWorkspace.workspace.observable.addFieldListener(
         'settings',
         () => { this.applyVisualState(); },
+        this.listenerKey,
+      );
+      this.konvaWorkspace.workspace.appSettings?.observable?.addFieldListener?.(
+        'settings',
+        () => {
+          this.refreshBodyText();
+          this.group.getLayer()?.batchDraw?.();
+        },
         this.listenerKey,
       );
   
@@ -4607,7 +5033,7 @@
         };
       }
       return {
-        text: KonvaTextItem.emptyPlaceholderText,
+        text: KonvaTextItem.getEmptyPlaceholderText(),
         placeholder: true,
       };
     }
@@ -4782,8 +5208,8 @@
       this.applyCanvasSize(size, false);
     }
   
-    setCanvasPosition(x, y) {
-      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
+    setCanvasPosition(x, y, options = {}) {
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }, options) ?? { x, y };
       this.group.position(nextPosition);
       this.konvaWorkspace.ensureAncestorsFit(this);
     }
@@ -5768,8 +6194,8 @@
       this.konvaWorkspace.updateConnectionsForMovedItem(this);
     }
   
-    setCanvasPosition(x, y) {
-      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }) ?? { x, y };
+    setCanvasPosition(x, y, options = {}) {
+      const nextPosition = this.konvaWorkspace.resolveItemPosition(this, { x, y }, options) ?? { x, y };
       this.moveSubtreeToPosition(nextPosition);
       this.expandDisplacementMemo = [];
       this.expandDisplacementSourcePosition = null;
@@ -7234,7 +7660,7 @@
         item.model?.getParent?.()?.removeChild?.(item.model);
       }
   
-      item.setCanvasPosition(nextPosition.x, nextPosition.y);
+      item.setCanvasPosition(nextPosition.x, nextPosition.y, { snap: false });
       return true;
     }
   
@@ -10172,7 +10598,7 @@
       return {
         id: Number.isInteger(id) && id > 0 ? id : 0,
         type: 'text',
-        name: typeof item.name === 'string' && item.name.trim() ? item.name : TextItem.defaultName,
+        name: typeof item.name === 'string' && item.name.trim() ? item.name : TextItem.getDefaultName(),
         parentId: Number.isInteger(parentId) && parentId > 0 ? parentId : null,
         text: TextItem.normalizeText(item.text),
         format: TextItem.normalizeFormat(item.format),
@@ -10736,6 +11162,26 @@
       propertyConnectionColor: Project.defaultPropertyConnectionColor,
     });
   
+    static t(key, fallback, params = {}) {
+      return globalThis.DoublePhiI18n?.t?.(key, params) ?? fallback;
+    }
+  
+    static getDefaultName() {
+      return Project.t('project.defaultName', Project.defaultName);
+    }
+  
+    static getDefaultWorkspaceBaseName() {
+      return Project.t('project.defaultWorkspaceBaseName', Project.defaultWorkspaceBaseName);
+    }
+  
+    static getDefaultLibraryBaseName() {
+      return Project.t('project.defaultLibraryBaseName', Project.defaultLibraryBaseName);
+    }
+  
+    static getDefaultLibraryEntryBaseName() {
+      return Project.t('project.defaultLibraryEntryBaseName', Project.defaultLibraryEntryBaseName);
+    }
+  
     static normalizeHexColor(value, fallback) {
       const normalizedFallback = typeof fallback === 'string' ? fallback.toLowerCase() : '#000000';
       if (typeof value !== 'string') return normalizedFallback;
@@ -10822,10 +11268,10 @@
       return matchingPreset?.id ?? null;
     }
   
-    constructor(name = Project.defaultName, logger = null) {
+    constructor(name = null, logger = null) {
       this.logger = logger;
       this.observable = new Observable(logger);
-      this.name = Project.normalizeName(name, Project.defaultName);
+      this.name = Project.normalizeName(name, Project.getDefaultName());
       this.description = '';
       this.settings = Project.createDefaultSettings();
       this.workspaces = [];
@@ -10836,10 +11282,13 @@
       this.nextLibraryEntryId = 0;
     }
   
-    static normalizeName(name, fallback = Project.defaultName) {
-      if (typeof name !== 'string') return fallback;
+    static normalizeName(name, fallback = null) {
+      const resolvedFallback = typeof fallback === 'string' && fallback.trim()
+        ? fallback
+        : Project.getDefaultName();
+      if (typeof name !== 'string') return resolvedFallback;
       const normalizedName = name.trim();
-      return normalizedName || fallback;
+      return normalizedName || resolvedFallback;
     }
   
     static normalizeDescription(description) {
@@ -10920,7 +11369,7 @@
     }
   
     setName(name) {
-      const normalizedName = Project.normalizeName(name, Project.defaultName);
+      const normalizedName = Project.normalizeName(name, Project.getDefaultName());
       if (normalizedName === this.name) return false;
       this.name = normalizedName;
       this.observable.fireFieldListener('name', this.name);
@@ -10938,21 +11387,23 @@
     }
   
     buildDefaultWorkspaceName() {
+      const workspaceBaseName = Project.getDefaultWorkspaceBaseName();
       let index = 1;
-      let nextName = `${Project.defaultWorkspaceBaseName} ${index}`;
+      let nextName = `${workspaceBaseName} ${index}`;
       while (this.workspaces.some((workspace) => workspace.name === nextName)) {
         index += 1;
-        nextName = `${Project.defaultWorkspaceBaseName} ${index}`;
+        nextName = `${workspaceBaseName} ${index}`;
       }
       return nextName;
     }
   
     buildDefaultLibraryName() {
+      const libraryBaseName = Project.getDefaultLibraryBaseName();
       let index = 1;
-      let nextName = Project.defaultLibraryBaseName;
+      let nextName = libraryBaseName;
       while (this.libraries.some((library) => library.name === nextName)) {
         index += 1;
-        nextName = `${Project.defaultLibraryBaseName} ${index}`;
+        nextName = `${libraryBaseName} ${index}`;
       }
       return nextName;
     }
@@ -10964,11 +11415,12 @@
       const entries = Array.isArray(libraryRecord?.entries)
         ? libraryRecord.entries
         : this.libraries.flatMap((library) => library.entries ?? []);
+      const libraryEntryBaseName = Project.getDefaultLibraryEntryBaseName();
       let index = 1;
-      let nextName = `${Project.defaultLibraryEntryBaseName} ${index}`;
+      let nextName = `${libraryEntryBaseName} ${index}`;
       while (entries.some((entry) => entry.name === nextName)) {
         index += 1;
-        nextName = `${Project.defaultLibraryEntryBaseName} ${index}`;
+        nextName = `${libraryEntryBaseName} ${index}`;
       }
       return nextName;
     }
@@ -11273,7 +11725,7 @@
     addLibraryEntry(name, rootType, snapshot, id = null) {
       let targetLibrary = this.getPrimaryLibraryRecord();
       if (!targetLibrary) {
-        targetLibrary = this.getLibraryRecord(this.addLibrary(Project.defaultLibraryBaseName).id);
+        targetLibrary = this.getLibraryRecord(this.addLibrary(Project.getDefaultLibraryBaseName()).id);
       }
       return this.addLibraryEntryToLibrary(targetLibrary.id, name, rootType, snapshot, id);
     }
@@ -11288,7 +11740,7 @@
     }
   
     replaceFromSnapshot(snapshot) {
-      this.name = Project.normalizeName(snapshot?.name, Project.defaultName);
+      this.name = Project.normalizeName(snapshot?.name, Project.getDefaultName());
       this.description = Project.normalizeDescription(snapshot?.description);
       this.settings = Project.normalizeSettings(snapshot?.settings);
       this.workspaces = [];
@@ -11325,7 +11777,7 @@
           });
         });
       } else {
-        const projectLibrary = this.addLibrary(Project.defaultLibraryBaseName);
+        const projectLibrary = this.addLibrary(Project.getDefaultLibraryBaseName());
         (snapshot?.componentLibrary ?? []).forEach((librarySnapshot) => {
           this.addLibraryEntryToLibrary(
             projectLibrary.id,
@@ -11379,7 +11831,7 @@
       this.observable = new Observable(logger);
       this.workspacePersistence = new WorkspacePersistence(workspace, konvaWorkspace, logger);
       this.clipboardSnapshot = null;
-      this.project = new Project(Project.defaultName, logger);
+      this.project = new Project(Project.getDefaultName(), logger);
       if (this.konvaWorkspace) {
         this.konvaWorkspace.projectController = this;
       }
@@ -11404,9 +11856,9 @@
     }
   
     initializeDefaultProject() {
-      this.project = new Project(Project.defaultName, this.logger);
+      this.project = new Project(Project.getDefaultName(), this.logger);
       const initialWorkspace = this.project.addWorkspace(
-        `${Project.defaultWorkspaceBaseName} 1`,
+        `${Project.getDefaultWorkspaceBaseName()} 1`,
         WorkspacePersistence.createEmptySnapshot(),
       );
       this.project.addLibrary();
@@ -11581,7 +12033,7 @@
   
     addLibraryFromSnapshot(librarySnapshot, options = {}) {
       const nextLibrary = this.project.addLibrary(
-        options.name ?? librarySnapshot?.name ?? Project.defaultLibraryBaseName,
+        options.name ?? librarySnapshot?.name ?? Project.getDefaultLibraryBaseName(),
         null,
         options.description ?? librarySnapshot?.description ?? '',
       );
@@ -12166,6 +12618,9 @@
     static browserCacheStorageKey = 'doublephi:project-browser-cache';
     static libraryBrowserCacheVersion = 1;
     static libraryBrowserCacheStorageKey = 'doublephi:library-browser-cache';
+    static t(key, fallback, params = {}) {
+      return globalThis.DoublePhiI18n?.t?.(key, params) ?? fallback;
+    }
     static libraryFileVersion = 1;
     static libraryFileType = 'doublephi-library';
   
@@ -12347,7 +12802,7 @@
       const snapshot = this.buildSnapshot();
       const projectName = Project.normalizeName(
         name ?? snapshot?.name ?? this.projectController.getProjectName?.(),
-        Project.defaultName,
+        Project.getDefaultName(),
       );
       const entries = this.readStoredEntries(ProjectPersistence.browserCacheStorageKey);
       const savedAt = new Date().toISOString();
@@ -12441,7 +12896,7 @@
     saveStandaloneLibrarySnapshotToBrowserCache(librarySnapshot, name = null) {
       const libraryName = Project.normalizeName(
         name ?? librarySnapshot?.name,
-        Project.defaultLibraryBaseName,
+        Project.getDefaultLibraryBaseName(),
       );
       const entries = this.readStoredEntries(ProjectPersistence.libraryBrowserCacheStorageKey);
       const savedAt = new Date().toISOString();
@@ -12555,7 +13010,7 @@
   
       return {
         version: ProjectPersistence.version,
-        name: Project.normalizeName(migratedSnapshot.name, Project.defaultName),
+        name: Project.normalizeName(migratedSnapshot.name, Project.getDefaultName()),
         description: Project.normalizeDescription(migratedSnapshot.description),
         settings: Project.normalizeSettings(migratedSnapshot.settings),
         activeWorkspaceId,
@@ -12583,7 +13038,7 @@
           ? snapshot.libraries
           : [{
             id: 1,
-            name: Project.defaultLibraryBaseName,
+            name: Project.getDefaultLibraryBaseName(),
             entries: Array.isArray(snapshot?.componentLibrary) ? snapshot.componentLibrary : [],
           }],
       };
@@ -12597,14 +13052,14 @@
       const migratedWorkspaceSnapshot = this.projectController.workspacePersistence.migrateSnapshot(snapshot);
       return {
         version: ProjectPersistence.version,
-        name: Project.defaultName,
+        name: Project.getDefaultName(),
         description: '',
         settings: this.extractProjectSettingsFromWorkspaceSnapshot(snapshot),
         activeWorkspaceId: 1,
         workspaces: [
           {
             id: 1,
-            name: `${Project.defaultWorkspaceBaseName} 1`,
+            name: `${Project.getDefaultWorkspaceBaseName()} 1`,
             description: '',
             snapshot: migratedWorkspaceSnapshot,
           },
@@ -12612,7 +13067,7 @@
         libraries: [
           {
             id: 1,
-            name: Project.defaultLibraryBaseName,
+            name: Project.getDefaultLibraryBaseName(),
             entries: [],
           },
         ],
@@ -12645,7 +13100,7 @@
           id: workspaceId,
           name: Project.normalizeName(
             workspaceSnapshot?.name,
-            `${Project.defaultWorkspaceBaseName} ${index + 1}`,
+            `${Project.getDefaultWorkspaceBaseName()} ${index + 1}`,
           ),
           description: Project.normalizeDescription(workspaceSnapshot?.description),
           snapshot: this.projectController.workspacePersistence.migrateSnapshot(
@@ -12658,7 +13113,7 @@
       if (normalizedWorkspaces.length > 0) return normalizedWorkspaces;
       return [{
         id: 1,
-        name: `${Project.defaultWorkspaceBaseName} 1`,
+        name: `${Project.getDefaultWorkspaceBaseName()} 1`,
         description: '',
         snapshot: WorkspacePersistence.createEmptySnapshot(),
       }];
@@ -12670,7 +13125,7 @@
         ? libraries
         : [{
           id: 1,
-          name: Project.defaultLibraryBaseName,
+          name: Project.getDefaultLibraryBaseName(),
           entries: Array.isArray(componentLibrary) ? componentLibrary : [],
         }];
       const normalizedLibraries = [];
@@ -12705,7 +13160,7 @@
           id: normalizedLibraryId,
           name: Project.normalizeName(
             librarySnapshot?.name,
-            index === 0 ? Project.defaultLibraryBaseName : `${Project.defaultLibraryBaseName} ${index + 1}`,
+            index === 0 ? Project.getDefaultLibraryBaseName() : `${Project.getDefaultLibraryBaseName()} ${index + 1}`,
           ),
           description: Project.normalizeDescription(librarySnapshot?.description),
           entries: normalizedEntries,
@@ -12717,7 +13172,7 @@
         ? []
         : [{
           id: 1,
-          name: Project.defaultLibraryBaseName,
+          name: Project.getDefaultLibraryBaseName(),
           description: '',
           entries: [],
         }];
@@ -12734,7 +13189,7 @@
         id: Number.isInteger(librarySnapshot?.id) && librarySnapshot.id > 0
           ? librarySnapshot.id
           : 1,
-        name: Project.normalizeName(librarySnapshot?.name, Project.defaultLibraryBaseName),
+        name: Project.normalizeName(librarySnapshot?.name, Project.getDefaultLibraryBaseName()),
         entries: this.normalizeLibraryEntries(
           librarySnapshot?.entries ?? [],
           usedEntryIds,
@@ -12799,7 +13254,7 @@
           id: entryId,
           name: Project.normalizeName(
             libraryEntry?.name,
-            `${Project.defaultLibraryEntryBaseName} ${index + 1}`,
+            `${Project.getDefaultLibraryEntryBaseName()} ${index + 1}`,
           ),
           rootType,
           snapshot: entrySnapshot,
@@ -12874,7 +13329,7 @@
   
       if (!snapshot) return null;
   
-      const fallbackName = `${Project.defaultName} ${Number(index) + 1}`;
+      const fallbackName = `${Project.getDefaultName()} ${Number(index) + 1}`;
       const name = Project.normalizeName(entry.name ?? snapshot.name, fallbackName);
       const id = typeof entry.id === 'string' && entry.id.trim()
         ? entry.id.trim()
@@ -12897,7 +13352,7 @@
         return null;
       }
   
-      const fallbackName = `${Project.defaultLibraryBaseName} ${Number(index) + 1}`;
+      const fallbackName = `${Project.getDefaultLibraryBaseName()} ${Number(index) + 1}`;
       const name = Project.normalizeName(entry.name ?? snapshot.name, fallbackName);
       const id = typeof entry.id === 'string' && entry.id.trim()
         ? entry.id.trim()
@@ -13741,21 +14196,64 @@
   };
   
   const CompactHelpSampleModel = Object.freeze({
+    t(key, fallback, params = {}) {
+      return globalThis.DoublePhiI18n?.t?.(key, params) ?? fallback;
+    },
+  
+    localizeProjectSnapshot(projectSnapshot) {
+      if (!projectSnapshot || typeof projectSnapshot !== 'object') return projectSnapshot;
+  
+      projectSnapshot.name = this.t('sample.projectName', 'Untitled Project');
+  
+      const workspaces = Array.isArray(projectSnapshot.workspaces) ? projectSnapshot.workspaces : [];
+      const primaryWorkspace = workspaces.find((workspace) => workspace?.id === 1);
+      if (primaryWorkspace) {
+        primaryWorkspace.name = this.t('sample.workspaceName', 'Workspace 1');
+      }
+  
+      const demoWorkspace = workspaces.find((workspace) => workspace?.id === 2);
+      if (demoWorkspace) {
+        demoWorkspace.name = this.t('sample.demoWorkspaceName', 'Compact Help Demo');
+        const items = Array.isArray(demoWorkspace?.snapshot?.items) ? demoWorkspace.snapshot.items : [];
+        const textItem = items.find((item) => item?.id === 5 && item?.type === 'text');
+        if (textItem) {
+          textItem.name = this.t('sample.textItemName', 'Demo Notes');
+          textItem.text = this.t('sample.textNotes', textItem.text ?? '');
+        }
+        const controlPanels = Array.isArray(demoWorkspace?.snapshot?.controlPanels)
+          ? demoWorkspace.snapshot.controlPanels
+          : [];
+        const demoControlPanel = controlPanels.find((panel) => panel?.id === 1 || panel?.name === 'Demo Controls');
+        if (demoControlPanel) {
+          demoControlPanel.name = this.t('sample.controlPanelName', 'Demo Controls');
+        }
+      }
+  
+      const libraries = Array.isArray(projectSnapshot.libraries) ? projectSnapshot.libraries : [];
+      const primaryLibrary = libraries.find((library) => library?.id === 1);
+      if (primaryLibrary) {
+        primaryLibrary.name = this.t('sample.libraryName', 'Project Library');
+      }
+  
+      return projectSnapshot;
+    },
+  
     cloneProjectSnapshot() {
-      return JSON.parse(JSON.stringify(CompactHelpSampleProjectSnapshot));
+      return this.localizeProjectSnapshot(JSON.parse(JSON.stringify(CompactHelpSampleProjectSnapshot)));
     },
   
     getWorkspaceRecord(projectSnapshot = this.cloneProjectSnapshot()) {
       const workspaces = Array.isArray(projectSnapshot?.workspaces) ? projectSnapshot.workspaces : [];
       const activeWorkspaceId = Number(projectSnapshot?.activeWorkspaceId);
       return workspaces.find((workspace) => workspace?.id === activeWorkspaceId)
+        ?? workspaces.find((workspace) => workspace?.name === this.t('sample.demoWorkspaceName', 'Compact Help Demo'))
         ?? workspaces.find((workspace) => workspace?.name === 'Compact Help Demo')
         ?? workspaces[0]
         ?? null;
     },
   
     getWorkspaceName() {
-      return this.getWorkspaceRecord()?.name ?? 'Compact Help Demo';
+      return this.getWorkspaceRecord()?.name ?? this.t('sample.demoWorkspaceName', 'Compact Help Demo');
     },
   
     getWorkspaceSnapshot() {
@@ -16882,6 +17380,7 @@
   <!-- inlined from ./lib/Konva/KonvaStyles/KonvaContainerStyles.js -->
   <script>
   class KonvaContainerStyles {
+    static darkThemeCanvasColor = '#0f172a';
   
     static instance = new KonvaContainerStyles();
   
@@ -16915,10 +17414,16 @@
         : Project.lightenColor(color, amount + 0.18);
     }
   
+    getDisplaySurfaceColor(color, isDarkTheme, mixAmount = 0.42) {
+      if (isDarkTheme !== true) return color;
+      return Project.mixColors(color, KonvaContainerStyles.darkThemeCanvasColor, mixAmount);
+    }
+  
     applyProjectSettings(settings = Project.createDefaultSettings()) {
-      const normalizedSettings = Project.normalizeSettings(settings);
-      const bodyColor = normalizedSettings.nodeBodyColor;
-      const headerColor = normalizedSettings.nodeHeaderColor;
+      const normalizedSettings = Project.normalizePaletteSettings(settings);
+      const isDarkTheme = normalizedSettings.themeMode === 'dark';
+      const bodyColor = this.getDisplaySurfaceColor(normalizedSettings.nodeBodyColor, isDarkTheme, 0.46);
+      const headerColor = this.getDisplaySurfaceColor(normalizedSettings.nodeHeaderColor, isDarkTheme, 0.34);
       const selectionColor = normalizedSettings.nodeSelectionColor;
       const selectedBodyColor = this.offsetSurfaceColor(bodyColor, 0.08);
       const activeBodyColor = this.offsetSurfaceColor(bodyColor, 0.14);
@@ -20143,7 +20648,7 @@
               kind: 'project',
               depth: 0,
               matchesSelf,
-              projectName: this.projectController.getProjectName?.() ?? Project.defaultName,
+              projectName: this.projectController.getProjectName?.() ?? Project.getDefaultName(),
               children: workspaceEntries,
           }];
       }
@@ -20198,7 +20703,7 @@
   
       getEntryLabel(entry) {
           if (entry?.kind === 'project') {
-              return entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.defaultName;
+              return entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.getDefaultName();
           }
           if (entry?.kind === 'workspace') return entry.workspaceName ?? '';
           return entry?.kind === 'element'
@@ -20233,7 +20738,7 @@
       getEntryMetaText(entry) {
           if (entry?.kind === 'project') {
               const workspaceCount = this.getProjectWorkspaceContexts().length;
-              return `Project · ${entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.defaultName} · ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}`;
+              return `Project · ${entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.getDefaultName()} · ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}`;
           }
           if (entry?.kind === 'workspace') {
               const itemCount = this.getWorkspaceModels(entry.workspace).length;
@@ -20684,6 +21189,7 @@
       constructor(x, y, projectController, appSettings, workspace, konvaWorkspace, panelHelper, logger, codePanel, componentPanel, workspaceNavigatorPanel, loggerPanel, controlPanelsPanel) {
           this.projectController = projectController;
           this.appSettings = appSettings ?? workspace?.appSettings ?? AppSettings.createEphemeral(logger);
+          globalThis.DoublePhiI18n?.setLanguage?.(this.appSettings.getSettings?.()?.language);
           this.workspace = workspace;
           this.konvaWorkspace = konvaWorkspace;
           this.persistence = new ProjectPersistence(projectController, logger);
@@ -20716,10 +21222,12 @@
           this.projectSummary = null;
           this.workspaceNameInput = null;
           this.workspaceMeta = null;
+          this.renderedLanguage = globalThis.DoublePhiI18n?.getLanguage?.() ?? 'en';
+          const t = (key, params = {}) => this.t(key, params);
   
           this.settingsPanel = new Panel(secondaryPanelX + 16, y + 24, panelHelper, {
-              title: 'Settings',
-              eyebrow: 'Application',
+              title: t('panel.settings'),
+              eyebrow: t('panel.application'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.settings,
               persistenceId: 'app:settings',
@@ -20732,8 +21240,8 @@
           this.settingsPanel.dockTo('left');
   
           this.libraryPanel = new Panel(secondaryPanelX + 32, y + 72, panelHelper, {
-              title: 'Library',
-              eyebrow: 'Project',
+              title: t('panel.library'),
+              eyebrow: t('panel.project'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.library,
               persistenceId: 'project:library',
@@ -20746,8 +21254,8 @@
           this.libraryPanel.dockTo('left');
   
           this.persistencePanel = new Panel(secondaryPanelX + 64, y + 144, panelHelper, {
-              title: 'Persistence',
-              eyebrow: 'Project',
+              title: t('panel.persistence'),
+              eyebrow: t('panel.project'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.persistence,
               persistenceId: 'project:persistence',
@@ -20763,8 +21271,8 @@
           const helpPanelX = helpPanelBounds.left;
           const helpPanelY = helpPanelBounds.top;
           this.helpPanel = new Panel(helpPanelX, helpPanelY, panelHelper, {
-              title: 'Help',
-              eyebrow: 'Workspace',
+              title: t('panel.help'),
+              eyebrow: t('panel.workspace'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.help,
               persistenceId: 'workspace:help',
@@ -20836,12 +21344,14 @@
                   await this.persistence.loadFromFile(file);
                   this.loadTextarea.value = await file.text();
                   this.persistencePanel.open();
-                  this.setStatus(`Loaded ${file.name}.`);
+                  this.setStatus(this.t('status.loadedFile', {
+                      name: file.name,
+                  }));
                   this.syncProjectUi();
               } catch (error) {
                   console.error('Failed to load project file.', error);
                   this.persistencePanel.open();
-                  this.setStatus('File load failed.');
+                  this.setStatus(this.t('status.fileLoadFailed'));
               }
           });
   
@@ -20849,8 +21359,18 @@
               this.syncRunState();
           });
           this.appSettings.observable.addFieldListener('settings', (settings) => {
-              this.syncApplicationSettingsUi(settings);
-              this.projectController.applyProjectPalette?.(settings);
+              const normalizedSettings = AppSettings.normalizeSettings(
+                  settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
+              );
+              const nextLanguage = normalizedSettings.language;
+              if (nextLanguage !== this.renderedLanguage) {
+                  const previousLanguage = this.renderedLanguage;
+                  globalThis.DoublePhiI18n?.setLanguage?.(nextLanguage);
+                  this.renderedLanguage = nextLanguage;
+                  this.refreshLanguageUi(previousLanguage);
+              }
+              this.syncApplicationSettingsUi(normalizedSettings);
+              this.projectController.applyProjectPalette?.(normalizedSettings);
           }, this.appSettingsListenerKey);
           this.workspace.observable.addFieldListener('selection', () => {
               this.syncLibraryCaptureState();
@@ -20863,6 +21383,242 @@
           this.syncApplicationSettingsUi(this.appSettings.getSettings?.());
           this.syncProjectUi();
           this.syncToolbarState();
+      }
+  
+      t(key, params = {}) {
+          return globalThis.DoublePhiI18n?.t?.(key, params) ?? key;
+      }
+  
+      setSectionCardTitle(card, title) {
+          const titleElement = card?.element?.querySelector?.('.dp-section-title');
+          if (titleElement) {
+              titleElement.innerText = title;
+          }
+      }
+  
+      setToolbarButtonTooltip(button, tooltip) {
+          if (!button) return;
+          button.title = tooltip;
+          button.setAttribute('aria-label', tooltip);
+      }
+  
+      setCreateToolbarButtonLabels(button, tooltip, labelText) {
+          if (!button) return;
+          const dragTooltip = this.t('toolbar.dragToCanvas', { tooltip });
+          const textElement = button.querySelector('.dp-toolbar-btn-text');
+          if (textElement) {
+              textElement.innerText = labelText;
+          }
+          button.title = dragTooltip;
+          button.setAttribute('aria-label', dragTooltip);
+      }
+  
+      refreshLanguageUi(previousLanguage = null) {
+          document.title = this.t('app.title');
+  
+          this.settingsPanel?.setTitle?.(this.t('panel.settings'));
+          this.settingsPanel?.setEyebrow?.(this.t('panel.application'));
+          this.libraryPanel?.setTitle?.(this.t('panel.library'));
+          this.libraryPanel?.setEyebrow?.(this.t('panel.project'));
+          this.persistencePanel?.setTitle?.(this.t('panel.persistence'));
+          this.persistencePanel?.setEyebrow?.(this.t('panel.project'));
+          this.helpPanel?.setTitle?.(this.t('panel.help'));
+          this.helpPanel?.setEyebrow?.(this.t('panel.workspace'));
+  
+          this.setSectionCardTitle(this.displaySettingsCard, this.t('settings.display'));
+          this.setSectionCardTitle(this.startupSettingsCard, this.t('settings.startup'));
+          this.setSectionCardTitle(this.canvasSettingsCard, this.t('settings.canvas'));
+          this.setSectionCardTitle(this.highlightingSettingsCard, this.t('settings.highlighting'));
+          this.setSectionCardTitle(this.featureGatesSettingsCard, this.t('settings.featureGates'));
+          this.setSectionCardTitle(this.browserLibraryCard, this.t('library.savedLibraries'));
+          this.setSectionCardTitle(this.persistenceProjectDataCard, this.t('persistence.projectData'));
+          this.setSectionCardTitle(this.persistenceSavedProjectsCard, this.t('library.savedLibraries'));
+  
+          this.languageSetting?.setLabels?.(
+              this.t('settings.language'),
+              this.t('settings.languageDescription'),
+          );
+          this.languageSetting?.setChoices?.(
+              globalThis.DoublePhiI18n?.getLanguageOptions?.() ?? [{ value: 'en', label: 'English' }],
+              {
+                  normalizeValue: (value) => globalThis.DoublePhiI18n?.normalizeLanguage?.(value) ?? 'en',
+                  getAriaLabel: () => this.t('settings.languageSelectAria'),
+              },
+          );
+  
+          const themeModeOptions = Workspace.themeModeOptions.map((optionValue) => ({
+              value: optionValue,
+              label: optionValue === 'dark' ? this.t('settings.themeDark') : this.t('settings.themeDefault'),
+          }));
+          this.themeModeSetting?.setLabels?.(
+              this.t('settings.theme'),
+              this.t('settings.themeDescription'),
+          );
+          this.themeModeSetting?.setChoices?.(themeModeOptions, {
+              normalizeValue: (value) => Workspace.normalizeThemeModeValue(value),
+              formatValue: (value, activeChoice) => activeChoice?.label ?? (value === 'dark'
+                  ? this.t('settings.themeDark')
+                  : this.t('settings.themeDefault')),
+              getAriaLabel: (choice) => this.t('settings.themeAria', { label: choice.label }),
+          });
+  
+          const interfaceScaleOptions = Workspace.interfaceScaleOptions.map((optionValue, index) => ({
+              value: optionValue,
+              label: index === 0
+                  ? this.t('settings.interfaceLarge')
+                  : index === 1
+                      ? this.t('settings.interfaceMedium')
+                      : this.t('settings.interfaceSmall'),
+          }));
+          this.interfaceScaleSetting?.setLabels?.(
+              this.t('settings.interfaceSize'),
+              this.t('settings.interfaceSizeDescription'),
+          );
+          this.interfaceScaleSetting?.setChoices?.(interfaceScaleOptions, {
+              normalizeValue: (value) => Workspace.normalizeInterfaceScaleValue(value),
+              formatValue: (value, activeChoice) => this.t('settings.interfacePercent', {
+                  label: activeChoice?.label ?? this.t('settings.interfaceLarge'),
+                  percent: Math.round(value * 100),
+              }),
+              getAriaLabel: (choice) => this.t('settings.interfaceSizeAria', { label: choice.label }),
+          });
+  
+          this.showIntroPageOnStartupToggle?.setLabels?.(
+              this.t('settings.openingPage'),
+              this.t('settings.openingPageDescription'),
+          );
+          this.gridSnappingToggle?.setLabels?.(
+              this.t('settings.gridSnapping'),
+              this.t('settings.gridSnappingDescription'),
+          );
+          this.componentHighlightingToggle?.setLabels?.(
+              this.t('settings.componentHighlighting'),
+              this.t('settings.componentHighlightingDescription'),
+          );
+          this.connectorHighlightingToggle?.setLabels?.(
+              this.t('settings.connectorHighlighting'),
+              this.t('settings.connectorHighlightingDescription'),
+          );
+          this.libraryWindowVisibilityToggle?.setLabels?.(
+              this.t('settings.libraryWindow'),
+              this.t('settings.libraryWindowDescription'),
+          );
+          this.projectDataPanelVisibilityToggle?.setLabels?.(
+              this.t('settings.projectDataPanel'),
+              this.t('settings.projectDataPanelDescription'),
+          );
+          this.logWindowVisibilityToggle?.setLabels?.(
+              this.t('settings.logWindow'),
+              this.t('settings.logWindowDescription'),
+          );
+          this.cliWindowVisibilityToggle?.setLabels?.(
+              this.t('settings.cliWindow'),
+              this.t('settings.cliWindowDescription'),
+          );
+          this.controlPanelsWindowVisibilityToggle?.setLabels?.(
+              this.t('settings.controlPanelsWindow'),
+              this.t('settings.controlPanelsWindowDescription'),
+          );
+          this.workspaceSelectorVisibilityToggle?.setLabels?.(
+              this.t('settings.workspaceSelector'),
+              this.t('settings.workspaceSelectorDescription'),
+          );
+  
+          if (this.projectLibraryTabButton) {
+              this.projectLibraryTabButton.innerText = this.t('library.projectLibraries');
+          }
+          if (this.browserLibraryTabButton) {
+              this.browserLibraryTabButton.innerText = this.t('library.savedLibraries');
+          }
+          if (this.libraryFilterInput?.element) {
+              this.libraryFilterInput.element.placeholder = this.t('library.searchPlaceholder');
+          }
+          if (this.btnAddLibraryRecord) {
+              this.btnAddLibraryRecord.innerText = this.t('library.addLibrary');
+              this.btnAddLibraryRecord.title = this.t('library.addLibraryTooltip');
+              this.btnAddLibraryRecord.setAttribute('aria-label', this.t('library.addLibraryTooltip'));
+          }
+          if (this.btnCaptureSelection) {
+              this.btnCaptureSelection.innerText = this.t('library.addSelected');
+          }
+          if (this.btnAddLibraryFromFile) {
+              this.btnAddLibraryFromFile.innerText = this.t('library.addFromFile');
+          }
+          if (this.libraryCollapseAllButton) {
+              this.libraryCollapseAllButton.innerText = this.t('library.collapseAll');
+              this.libraryCollapseAllButton.title = this.t('library.collapseAllTooltip');
+              this.libraryCollapseAllButton.setAttribute('aria-label', this.t('library.collapseAllTooltip'));
+          }
+          if (this.browserLibraryHint) {
+              this.browserLibraryHint.innerText = this.t('library.savedLibrariesDescription');
+          }
+  
+          if (this.btnSave) this.btnSave.innerText = this.t('persistence.save');
+          if (this.btnDownload) this.btnDownload.innerText = this.t('persistence.download');
+          if (this.btnLoad) this.btnLoad.innerText = this.t('persistence.load');
+          if (this.loadTextarea) {
+              this.loadTextarea.placeholder = this.t('persistence.pastePlaceholder');
+          }
+          if (this.btnSaveToBrowser) {
+              this.btnSaveToBrowser.innerText = this.t('persistence.saveCurrentProject');
+          }
+          if (this.helpSearchInput?.element) {
+              this.helpSearchInput.element.placeholder = this.t('help.filterPlaceholder');
+          }
+          if (this.helpSearchEmptyState) {
+              this.helpSearchEmptyState.innerText = this.t('help.noMatches');
+          }
+  
+          if (this.persistenceToolbarGroup) {
+              this.persistenceToolbarGroup.setAttribute('aria-label', this.t('toolbar.persistence'));
+          }
+          if (this.workspaceProjectToolbarGroup) {
+              this.workspaceProjectToolbarGroup.setAttribute('aria-label', this.t('toolbar.projectWorkspace'));
+          }
+          if (this.executionToolbarGroup) {
+              this.executionToolbarGroup.setAttribute('aria-label', this.t('toolbar.execution'));
+          }
+          if (this.createToolbarGroupElement) {
+              this.createToolbarGroupElement.setAttribute('aria-label', this.t('toolbar.create'));
+          }
+          if (this.windowsToolbarGroup) {
+              this.windowsToolbarGroup.setAttribute('aria-label', this.t('toolbar.windows'));
+          }
+          if (this.helpToolbarGroup) {
+              this.helpToolbarGroup.setAttribute('aria-label', this.t('toolbar.help'));
+          }
+  
+          this.setToolbarButtonTooltip(this.btnPersistencePanel, this.t('toolbar.openPersistence'));
+          this.setToolbarButtonTooltip(this.btnSettingsPanel, this.t('toolbar.openSettings'));
+          this.setToolbarButtonTooltip(this.btnNavigatorPanel, this.t('toolbar.openNavigator'));
+          if (this.workspaceToolbarSelect) {
+              this.workspaceToolbarSelect.setAttribute('aria-label', this.t('toolbar.switchWorkspace'));
+          }
+          this.setToolbarButtonTooltip(this.btnAddWorkspace, this.t('toolbar.addWorkspace'));
+          this.setToolbarButtonTooltip(this.btnLibraryPanel, this.t('toolbar.openLibrary'));
+          this.setToolbarButtonTooltip(this.btnStopExecution, this.t('toolbar.stopExecution'));
+          this.setToolbarButtonTooltip(this.btnPauseExecution, this.t('toolbar.pauseExecution'));
+          this.setToolbarButtonTooltip(this.btnStartExecution, this.t('toolbar.startExecution'));
+          this.setToolbarButtonTooltip(this.btnRestartExecution, this.t('toolbar.restartExecution'));
+          this.setCreateToolbarButtonLabels(this.btnAddComponent, this.t('toolbar.addComponent'), this.t('toolbar.component'));
+          this.setCreateToolbarButtonLabels(this.btnAddContainer, this.t('toolbar.addContainer'), this.t('toolbar.container'));
+          this.setCreateToolbarButtonLabels(this.btnAddTextItem, this.t('toolbar.addTextItem'), this.t('toolbar.text'));
+          this.setToolbarButtonTooltip(this.btnCodePanel, this.t('toolbar.openCode'));
+          this.setToolbarButtonTooltip(this.btnInspectorPanel, this.t('toolbar.openInspector'));
+          this.setToolbarButtonTooltip(this.btnLoggerPanel, this.t('toolbar.openLog'));
+          this.setToolbarButtonTooltip(this.btnControlPanels, this.t('toolbar.openControlPanels'));
+          this.setToolbarButtonTooltip(this.btnCommandLine, this.t('toolbar.toggleCommandLine'));
+          this.setToolbarButtonTooltip(this.btnHelpPanel, this.t('toolbar.openHelp'));
+  
+          if (this.persistenceStatusElement && previousLanguage != null) {
+              const previousReady = globalThis.DoublePhiI18n?.t?.('persistence.ready', {}, previousLanguage);
+              if (this.persistenceStatusElement.innerText === previousReady) {
+                  this.persistenceStatusElement.innerText = this.t('persistence.ready');
+              }
+          }
+  
+          this.renderHelpPanelContent(this.helpSearchInput?.element?.value ?? '');
+          this.syncProjectUi();
       }
   
       getDefaultHelpPanelBounds(fallbackTop = Panel.viewportMargin) {
@@ -20909,11 +21665,23 @@
       buildSettingsPanel() {
           const settingsPanelItem = this.settingsPanel.addPanelItem('settings');
           const shell = this.panelHelper.createElement('div', 'dp-stack dp-panel-scroll-shell');
-          const displayCard = this.panelHelper.createSectionCard('Display');
+          const displayCard = this.panelHelper.createSectionCard(this.t('settings.display'));
+          this.displaySettingsCard = displayCard;
+  
+          this.languageSetting = this.createLanguageRow(
+              this.t('settings.language'),
+              this.t('settings.languageDescription'),
+              (nextValue) => {
+                  this.appSettings.setSettings({
+                      language: nextValue,
+                  });
+              },
+          );
+          displayCard.body.appendChild(this.languageSetting.row);
   
           this.themeModeSetting = this.createThemeModeRow(
-              'Theme',
-              'Choose between the default window styling and a darker command-line inspired theme.',
+              this.t('settings.theme'),
+              this.t('settings.themeDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       themeMode: nextValue,
@@ -20923,8 +21691,8 @@
           displayCard.body.appendChild(this.themeModeSetting.row);
   
           this.interfaceScaleSetting = this.createInterfaceScaleRow(
-              'Interface Size',
-              'Scale toolbars, windows, and form controls without affecting the canvas workspace.',
+              this.t('settings.interfaceSize'),
+              this.t('settings.interfaceSizeDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       interfaceScale: nextValue,
@@ -20933,11 +21701,16 @@
           );
           displayCard.body.appendChild(this.interfaceScaleSetting.row);
   
+          this.startupSettingsCard = this.buildStartupCard();
+          this.canvasSettingsCard = this.buildCanvasInteractionCard();
+          this.highlightingSettingsCard = this.buildHighlightingCard();
+          this.featureGatesSettingsCard = this.buildFeatureGatesCard();
+  
           shell.appendChild(displayCard.element);
-          shell.appendChild(this.buildStartupCard().element);
-          shell.appendChild(this.buildCanvasInteractionCard().element);
-          shell.appendChild(this.buildHighlightingCard().element);
-          shell.appendChild(this.buildFeatureGatesCard().element);
+          shell.appendChild(this.startupSettingsCard.element);
+          shell.appendChild(this.canvasSettingsCard.element);
+          shell.appendChild(this.highlightingSettingsCard.element);
+          shell.appendChild(this.featureGatesSettingsCard.element);
           settingsPanelItem.appendChild(shell);
       }
   
@@ -20949,8 +21722,8 @@
           const browserTabButton = this.panelHelper.createElement('button', 'dp-panel-dock-tab dp-library-tab');
           projectTabButton.type = 'button';
           browserTabButton.type = 'button';
-          projectTabButton.innerText = 'Project Libraries';
-          browserTabButton.innerText = 'Saved Libraries';
+          projectTabButton.innerText = this.t('library.projectLibraries');
+          browserTabButton.innerText = this.t('library.savedLibraries');
           projectTabButton.addEventListener('click', () => {
               this.setActiveLibraryTab('project');
           });
@@ -20963,12 +21736,13 @@
           this.browserLibraryTabButton = browserTabButton;
   
           const projectLibraryCard = this.panelHelper.createSectionCard();
+          this.projectLibraryCard = projectLibraryCard;
           projectLibraryCard.element.classList.add('dp-fill-card');
           projectLibraryCard.body.classList.add('dp-fill-body');
           this.libraryFilterInput = this.panelHelper.createInput('', (value) => {
               this.applyLibraryFilter(value);
           }, {
-              placeholder: '⌕ Search libraries, components, containers, and text',
+              placeholder: this.t('library.searchPlaceholder'),
           });
           this.libraryFilterInput.element.classList.add('dp-workspace-tree-filter');
           this.libraryFilterInput.element.addEventListener('input', (event) => {
@@ -20976,27 +21750,27 @@
           });
   
           const projectLibraryActions = this.panelHelper.createElement('div', 'dp-inline-actions dp-library-panel-actions');
-          this.btnAddLibraryRecord = this.panelHelper.makeButton('secondary', 'Add Library', () => {
+          this.btnAddLibraryRecord = this.panelHelper.makeButton('secondary', this.t('library.addLibrary'), () => {
               this.handleAddLibrary();
           });
-          this.btnAddLibraryRecord.title = 'Add library';
-          this.btnAddLibraryRecord.setAttribute('aria-label', 'Add library');
+          this.btnAddLibraryRecord.title = this.t('library.addLibraryTooltip');
+          this.btnAddLibraryRecord.setAttribute('aria-label', this.t('library.addLibraryTooltip'));
           this.btnAddLibraryRecord.type = 'button';
-          this.btnCaptureSelection = this.panelHelper.makeButton('secondary', 'Add selected to Library', () => {
+          this.btnCaptureSelection = this.panelHelper.makeButton('secondary', this.t('library.addSelected'), () => {
               this.handleCaptureSelection();
           });
           const browserLibraryActions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          this.btnAddLibraryFromFile = this.panelHelper.makeButton('secondary', 'Add From File', () => {
+          this.btnAddLibraryFromFile = this.panelHelper.makeButton('secondary', this.t('library.addFromFile'), () => {
               this.handleAddLibraryFromFile();
           });
           browserLibraryActions.appendChild(this.btnAddLibraryFromFile);
   
-          this.libraryCollapseAllButton = this.panelHelper.makeButton('secondary', 'Collapse all', () => {
+          this.libraryCollapseAllButton = this.panelHelper.makeButton('secondary', this.t('library.collapseAll'), () => {
               this.collapseAllLibraryGroups();
           });
           this.libraryCollapseAllButton.type = 'button';
-          this.libraryCollapseAllButton.title = 'Collapse all library groups';
-          this.libraryCollapseAllButton.setAttribute('aria-label', 'Collapse all library groups');
+          this.libraryCollapseAllButton.title = this.t('library.collapseAllTooltip');
+          this.libraryCollapseAllButton.setAttribute('aria-label', this.t('library.collapseAllTooltip'));
           projectLibraryActions.appendChild(this.btnAddLibraryRecord);
           projectLibraryActions.appendChild(this.btnCaptureSelection);
           projectLibraryActions.appendChild(this.libraryCollapseAllButton);
@@ -21007,12 +21781,13 @@
           projectLibraryCard.body.appendChild(this.libraryFilterInput.element);
           projectLibraryCard.body.appendChild(this.libraryTree);
   
-          const browserLibraryCard = this.panelHelper.createSectionCard('Saved Libraries');
+          const browserLibraryCard = this.panelHelper.createSectionCard(this.t('library.savedLibraries'));
+          this.browserLibraryCard = browserLibraryCard;
           browserLibraryCard.element.classList.add('dp-fill-card');
           browserLibraryCard.body.classList.add('dp-section-body-spaced', 'dp-fill-body');
           browserLibraryCard.body.appendChild(browserLibraryActions);
           this.browserLibraryHint = this.panelHelper.createElement('div', 'dp-settings-description');
-          this.browserLibraryHint.innerText = 'Import a library from file, or reuse libraries already saved in this browser.';
+          this.browserLibraryHint.innerText = this.t('library.savedLibrariesDescription');
           this.browserLibraryList = this.panelHelper.createElement('div', 'dp-control-manager-list dp-fill-scroll');
           browserLibraryCard.body.appendChild(this.browserLibraryHint);
           browserLibraryCard.body.appendChild(this.browserLibraryList);
@@ -21032,10 +21807,13 @@
                   });
                   this.setActiveLibraryTab('browser');
                   this.renderBrowserCacheLibraryList();
-                  this.setStatus(`Saved library "${savedLibrary.name}" to this browser from ${file.name}.`);
+                  this.setStatus(this.t('status.savedLibraryFromFile', {
+                      libraryName: savedLibrary.name,
+                      fileName: file.name,
+                  }));
               } catch (error) {
                   console.error('Failed to add library from file.', error);
-                  this.setStatus(error.message || 'Library file import failed.');
+                  this.setStatus(error.message || this.t('status.libraryFileImportFailed'));
               } finally {
                   this.libraryFileInput.value = '';
               }
@@ -21166,38 +21944,39 @@
       buildPersistencePanel() {
           const persistencePanelItem = this.persistencePanel.addPanelItem('persistence');
           const shell = this.panelHelper.createElement('div', 'dp-stack dp-fill-shell');
-          const persistenceCard = this.panelHelper.createSectionCard('Project Data');
+          const persistenceCard = this.panelHelper.createSectionCard(this.t('persistence.projectData'));
+          this.persistenceProjectDataCard = persistenceCard;
           this.projectDataPersistenceCard = persistenceCard;
           persistenceCard.body.classList.add('dp-section-body-spaced');
           const persistenceActions = this.panelHelper.createElement('div', 'dp-inline-actions');
   
-          this.btnSave = this.panelHelper.makeButton('secondary', 'Save', async () => {
+          this.btnSave = this.panelHelper.makeButton('secondary', this.t('persistence.save'), async () => {
               try {
                   const serialized = await this.persistence.saveToClipboard();
                   this.loadTextarea.value = serialized;
-                  this.setStatus('Saved project to clipboard.');
+                  this.setStatus(this.t('status.savedProjectToClipboard'));
               } catch (error) {
                   console.error('Failed to save project.', error);
-                  this.setStatus('Save failed.');
+                  this.setStatus(this.t('status.saveFailed'));
               }
           });
-          this.btnDownload = this.panelHelper.makeButton('secondary', 'Download', () => {
+          this.btnDownload = this.panelHelper.makeButton('secondary', this.t('persistence.download'), () => {
               try {
                   const serialized = this.persistence.downloadToFile();
                   this.loadTextarea.value = serialized;
-                  this.setStatus('Downloaded project file.');
+                  this.setStatus(this.t('status.downloadedProjectFile'));
               } catch (error) {
                   console.error('Failed to download project.', error);
-                  this.setStatus('Download failed.');
+                  this.setStatus(this.t('status.downloadFailed'));
               }
           });
-          this.btnLoad = this.panelHelper.makeButton('secondary', 'Load', async () => {
+          this.btnLoad = this.panelHelper.makeButton('secondary', this.t('persistence.load'), async () => {
               try {
                   await this.persistence.loadFromText(this.loadTextarea.value);
-                  this.setStatus('Loaded project.');
+                  this.setStatus(this.t('status.loadedProject'));
               } catch (error) {
                   console.error('Failed to load project.', error);
-                  this.setStatus('Load failed.');
+                  this.setStatus(this.t('status.loadFailed'));
               }
           });
           persistenceActions.appendChild(this.btnSave);
@@ -21206,28 +21985,31 @@
           persistenceCard.body.appendChild(persistenceActions);
   
           this.loadTextarea = this.panelHelper.createElement('textarea', 'dp-load-textarea');
-          this.loadTextarea.placeholder = 'Paste saved project JSON here, or drop a .json file anywhere on the canvas.';
+          this.loadTextarea.placeholder = this.t('persistence.pastePlaceholder');
           persistenceCard.body.appendChild(this.loadTextarea);
   
           this.persistenceStatusElement = this.panelHelper.createElement('div', 'dp-persistence-status');
-          this.persistenceStatusElement.innerText = 'Ready.';
+          this.persistenceStatusElement.innerText = this.t('persistence.ready');
           persistenceCard.body.appendChild(this.persistenceStatusElement);
           shell.appendChild(persistenceCard.element);
   
-          const browserCacheCard = this.panelHelper.createSectionCard('Saved Libraries');
+          const browserCacheCard = this.panelHelper.createSectionCard(this.t('library.savedLibraries'));
+          this.persistenceSavedProjectsCard = browserCacheCard;
           browserCacheCard.element.classList.add('dp-fill-card');
           browserCacheCard.body.classList.add('dp-section-body-spaced', 'dp-fill-body');
           const browserCacheActions = this.panelHelper.createElement('div', 'dp-inline-actions');
   
-          this.btnSaveToBrowser = this.panelHelper.makeButton('secondary', 'Save Current Project', () => {
+          this.btnSaveToBrowser = this.panelHelper.makeButton('secondary', this.t('persistence.saveCurrentProject'), () => {
               try {
                   const savedProject = this.persistence.saveToBrowserCache();
                   this.loadTextarea.value = this.persistence.serialize();
                   this.renderBrowserCacheProjectList();
-                  this.setStatus(`Saved "${savedProject.name}" to this browser.`);
+                  this.setStatus(this.t('status.savedProjectToBrowser', {
+                      name: savedProject.name,
+                  }));
               } catch (error) {
                   console.error('Failed to save project to browser storage.', error);
-                  this.setStatus(error.message || 'Browser save failed.');
+                  this.setStatus(error.message || this.t('status.browserSaveFailed'));
               }
           });
           browserCacheActions.appendChild(this.btnSaveToBrowser);
@@ -21249,7 +22031,7 @@
           this.helpSearchInput = this.panelHelper.createInput('', (value) => {
               this.applyHelpSearch(value);
           }, {
-              placeholder: '⌕ Filter help by keyword',
+              placeholder: this.t('help.filterPlaceholder'),
           });
           this.helpSearchInput.element.classList.add('dp-help-search-input');
           this.helpSearchInput.element.addEventListener('input', (event) => {
@@ -21258,176 +22040,252 @@
           searchShell.appendChild(this.helpSearchInput.element);
           const scroll = this.panelHelper.createElement('div', 'dp-help-scroll');
           this.helpPanelScroll = scroll;
-          this.helpSearchCards = [];
-          this.helpSearchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-          this.helpSearchEmptyState.innerText = 'No help sections match that filter.';
-          this.helpSearchEmptyState.style.display = 'none';
-  
-          scroll.appendChild(this.createHelpSectionCard('What This App Does', [
-              {
-                  title: 'Model systems visually',
-                  description: 'Build diagrams out of components, text items, and containers to represent parts of a system and how they relate to each other.',
-              },
-              {
-                  title: 'Simulate behavior and flow',
-                  description: 'Give components properties, channels, timers, and triggers, connect them together, and run the workspace to watch values and messages move through the model.',
-              },
-              {
-                  title: 'Iterate, save, and reuse',
-                  description: 'Edit component logic, organize multiple workspaces, save projects as JSON, and keep reusable pieces in the library.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createCompactHelpSampleCard().element);
-  
-          scroll.appendChild(this.createLlmImportPromptCard().element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Getting Started', [
-              {
-                  title: 'Build on the canvas',
-                  description: 'Use the Create buttons to add components, text items, and containers, drag them into place, and connect matching properties or channels.',
-              },
-              {
-                  title: 'Inspect selections',
-                  description: 'Select an item to edit its details in the Inspector and, for components, its behavior in the Code window.',
-              },
-              {
-                  title: 'Run and iterate',
-                  description: 'Start, pause, stop, or restart execution from the toolbar while watching results in the Log and Control Panels windows.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Component Building Blocks', [
-              {
-                  title: 'Properties',
-                  description: 'Properties hold named values on a component, such as numbers, text, or status. Use them for component state and for value-to-value connections.',
-              },
-              {
-                  title: 'Channels',
-                  description: 'Channels carry sent messages or packets between components. Use them when one component needs to actively send data or events to another.',
-              },
-              {
-                  title: 'Timers',
-                  description: 'Timers fire on an interval and let a component run code repeatedly over time, like a heartbeat, poller, or scheduled update.',
-              },
-              {
-                  title: 'Triggers',
-                  description: 'Triggers are named actions you fire manually or from other logic to run a component response on demand.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Project and Workspace', [
-              {
-                  title: 'Selection Inspector',
-                  description: 'Use the inspector to rename the project or active workspace, edit descriptions, adjust canvas colors, and reset workspace windows.',
-              },
-              {
-                  title: 'Settings',
-                  description: 'Use the settings button to change the application theme, interface size, and workspace highlighting behavior.',
-              },
-              {
-                  title: 'Workspace switcher',
-                  description: 'Use the toolbar dropdown to change workspaces, and the + button to create a new one.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Library and Persistence', [
-              {
-                  title: 'Library',
-                  description: 'Organize reusable content into project libraries, browse each library in a searchable tree, and drag or add saved items back onto the canvas later.',
-              },
-              {
-                  title: 'Project Data',
-                  description: 'Save the current project to this browser or the clipboard, download it as JSON, or load pasted JSON back into the project.',
-              },
-              {
-                  title: 'File drop loading',
-                  description: 'Drop a .json project file anywhere on the canvas to load it through the persistence workflow.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Windows', [
-              {
-                  title: 'Navigator',
-                  description: 'Search the component and container tree, then focus and select any element in the workspace.',
-              },
-              {
-                  title: 'Inspector',
-                  description: 'Manage properties, channels, timers, triggers, and other details for the selected item.',
-              },
-              {
-                  title: 'Code',
-                  description: 'Edit component behavior and use completion hints while writing code.',
-              },
-              {
-                  title: 'Log',
-                  description: 'Review messages, runtime output, and status feedback from workspace actions.',
-              },
-              {
-                  title: 'Control Panels',
-                  description: 'Create operator-style panels for the properties, timers, and triggers that matter most.',
-              },
-              {
-                  title: 'Command Line',
-                  description: 'Run quick commands for creating, renaming, deleting, moving, connecting, undoing, and redoing.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Command Line Commands', [
-              { command: 'help', description: 'Show the available command line commands.' },
-              { command: 'comp <name>', description: 'Create a new component.' },
-              { command: 'cont <name>', description: 'Create a new container.' },
-              { command: 'chan <component name> <new channel name>', description: 'Add a channel to a component.' },
-              { command: 'prop <component name> <new property name>', description: 'Add a property to a component.' },
-              { command: 'tim <component name> <new timer name>', description: 'Add a timer to a component.' },
-              { command: 'trig <component name> <new trigger name>', description: 'Add a trigger to a component.' },
-              { command: 'lib <component name>', description: 'Save a component to the library.' },
-              { command: 'lib <container name>', description: 'Save a container subtree to the library.' },
-              { command: 'cp <item name>', description: 'Copy an item without its connections to the current workspace.' },
-              { command: 'cp <item name> <container name>', description: 'Copy an item without its connections into a container in the current workspace.' },
-              { command: 'cp <item name> <workspace name> [container name]', description: 'Copy an item without its connections into another workspace, optionally inside one of its containers.' },
-              { command: 'mv <item name> <container name>', description: 'Move an item into a container in the current workspace.' },
-              { command: 'mv <item name> <workspace name> [container name]', description: 'Move an item into another workspace, optionally inside one of its containers.' },
-              { command: 'ren <item name> <new name>', description: 'Rename an item or component element.' },
-              { command: 'del <item name>', description: 'Delete an item or component element.' },
-              { command: 'conn <component.element> <component.element>', description: 'Create a connection between matching endpoints.' },
-              { command: 'delconn <component.element> <component.element>', description: 'Delete a connection between endpoints.' },
-              { command: 'workspace <name>', description: 'Create a new workspace and switch to it.' },
-              { command: 'undo / redo', description: 'Undo or redo the last workspace action.' },
-              { command: 'start / pause / stop / restart', description: 'Control workspace execution from the command line.' },
-              {
-                  title: 'Quoting names',
-                  description: 'Wrap names with spaces in quotes when typing commands, for example "Engine Block".',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('About', [
-              {
-                  title: 'Dependencies',
-                  description: 'This app uses Konva for canvas rendering and interaction, along with standard browser APIs for clipboard, files, and workspace behavior.',
-              },
-              {
-                  title: 'Third-party software',
-                  description: 'Konva and any other third-party libraries remain the property of their respective authors and rights holders and are subject to their own licenses.',
-              },
-              {
-                  title: 'Rights reserved',
-                  description: 'All rights reserved for this application and its original content unless otherwise noted.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.createHelpSectionCard('Disclaimer', [
-              {
-                  title: 'Important',
-                  description: 'All components and events in this program, even those based on real systems, are entirely fictional. All system behavior is simulated... poorly. The following program contains course software code and due to its content it should not be used by anyone.',
-              },
-          ]).element);
-  
-          scroll.appendChild(this.helpSearchEmptyState);
           helpPanelItem.appendChild(shell);
           shell.appendChild(searchShell);
           shell.appendChild(scroll);
-          this.applyHelpSearch('');
+          this.renderHelpPanelContent('');
+      }
+  
+      renderHelpPanelContent(query = '') {
+          if (!(this.helpPanelScroll instanceof HTMLElement)) return;
+          const helpContent = this.getHelpContent();
+          this.helpSearchCards = [];
+          this.helpPanelScroll.replaceChildren();
+  
+          this.helpContentSections = helpContent.sections;
+          this.helpPanelScroll.appendChild(this.createHelpSectionCard(helpContent.sections[0].title, helpContent.sections[0].entries).element);
+          this.helpPanelScroll.appendChild(this.createCompactHelpSampleCard(helpContent.compactSample).element);
+          this.helpPanelScroll.appendChild(this.createLlmImportPromptCard(helpContent.llmImportPrompt).element);
+          helpContent.sections.slice(1).forEach((section) => {
+              this.helpPanelScroll.appendChild(this.createHelpSectionCard(section.title, section.entries).element);
+          });
+  
+          this.helpSearchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state');
+          this.helpSearchEmptyState.innerText = this.t('help.noMatches');
+          this.helpSearchEmptyState.style.display = 'none';
+          this.helpPanelScroll.appendChild(this.helpSearchEmptyState);
+          this.applyHelpSearch(query);
+      }
+  
+      getHelpContent() {
+          const language = globalThis.DoublePhiI18n?.getLanguage?.() ?? 'en';
+          const english = {
+              compactSample: {
+                  title: 'Compact Sample Model',
+                  description: 'Load a compact demo workspace with one outside operator component, a container holding two components and helper text, plus a control panel that shows message passing, property propagation, and promoted container properties.',
+                  buttonLabel: 'Load Compact Demo',
+                  searchLabel: 'Load Model',
+              },
+              llmImportPrompt: {
+                  title: 'LLM Import Prompt',
+                  description: 'Copy a compact machine-readable prompt for an LLM. It explains how to turn a user project description into importable JigBox project JSON and includes the required file format.',
+                  buttonLabel: 'Copy Import Prompt',
+              },
+              sections: [
+                  {
+                      title: 'What This App Does',
+                      entries: [
+                          { title: 'Model systems visually', description: 'Build diagrams out of components, text items, and containers to represent parts of a system and how they relate to each other.' },
+                          { title: 'Simulate behavior and flow', description: 'Give components properties, channels, timers, and triggers, connect them together, and run the workspace to watch values and messages move through the model.' },
+                          { title: 'Iterate, save, and reuse', description: 'Edit component logic, organize multiple workspaces, save projects as JSON, and keep reusable pieces in the library.' },
+                      ],
+                  },
+                  {
+                      title: 'Getting Started',
+                      entries: [
+                          { title: 'Build on the canvas', description: 'Use the Create buttons to add components, text items, and containers, drag them into place, and connect matching properties or channels.' },
+                          { title: 'Inspect selections', description: 'Select an item to edit its details in the Inspector and, for components, its behavior in the Code window.' },
+                          { title: 'Run and iterate', description: 'Start, pause, stop, or restart execution from the toolbar while watching results in the Log and Control Panels windows.' },
+                      ],
+                  },
+                  {
+                      title: 'Component Building Blocks',
+                      entries: [
+                          { title: 'Properties', description: 'Properties hold named values on a component, such as numbers, text, or status. Use them for component state and for value-to-value connections.' },
+                          { title: 'Channels', description: 'Channels carry sent messages or packets between components. Use them when one component needs to actively send data or events to another.' },
+                          { title: 'Timers', description: 'Timers fire on an interval and let a component run code repeatedly over time, like a heartbeat, poller, or scheduled update.' },
+                          { title: 'Triggers', description: 'Triggers are named actions you fire manually or from other logic to run a component response on demand.' },
+                      ],
+                  },
+                  {
+                      title: 'Project and Workspace',
+                      entries: [
+                          { title: 'Selection Inspector', description: 'Use the inspector to rename the project or active workspace, edit descriptions, adjust canvas colors, and reset workspace windows.' },
+                          { title: 'Settings', description: 'Use the settings button to change the application theme, interface size, and workspace highlighting behavior.' },
+                          { title: 'Workspace switcher', description: 'Use the toolbar dropdown to change workspaces, and the + button to create a new one.' },
+                      ],
+                  },
+                  {
+                      title: 'Library and Persistence',
+                      entries: [
+                          { title: 'Library', description: 'Organize reusable content into project libraries, browse each library in a searchable tree, and drag or add saved items back onto the canvas later.' },
+                          { title: 'Project Data', description: 'Save the current project to this browser or the clipboard, download it as JSON, or load pasted JSON back into the project.' },
+                          { title: 'File drop loading', description: 'Drop a .json project file anywhere on the canvas to load it through the persistence workflow.' },
+                      ],
+                  },
+                  {
+                      title: 'Windows',
+                      entries: [
+                          { title: 'Navigator', description: 'Search the component and container tree, then focus and select any element in the workspace.' },
+                          { title: 'Inspector', description: 'Manage properties, channels, timers, triggers, and other details for the selected item.' },
+                          { title: 'Code', description: 'Edit component behavior and use completion hints while writing code.' },
+                          { title: 'Log', description: 'Review messages, runtime output, and status feedback from workspace actions.' },
+                          { title: 'Control Panels', description: 'Create operator-style panels for the properties, timers, and triggers that matter most.' },
+                          { title: 'Command Line', description: 'Run quick commands for creating, renaming, deleting, moving, connecting, undoing, and redoing.' },
+                      ],
+                  },
+                  {
+                      title: 'Command Line Commands',
+                      entries: [
+                          { command: 'help', description: 'Show the available command line commands.' },
+                          { command: 'comp <name>', description: 'Create a new component.' },
+                          { command: 'cont <name>', description: 'Create a new container.' },
+                          { command: 'chan <component name> <new channel name>', description: 'Add a channel to a component.' },
+                          { command: 'prop <component name> <new property name>', description: 'Add a property to a component.' },
+                          { command: 'tim <component name> <new timer name>', description: 'Add a timer to a component.' },
+                          { command: 'trig <component name> <new trigger name>', description: 'Add a trigger to a component.' },
+                          { command: 'lib <component name>', description: 'Save a component to the library.' },
+                          { command: 'lib <container name>', description: 'Save a container subtree to the library.' },
+                          { command: 'cp <item name>', description: 'Copy an item without its connections to the current workspace.' },
+                          { command: 'cp <item name> <container name>', description: 'Copy an item without its connections into a container in the current workspace.' },
+                          { command: 'cp <item name> <workspace name> [container name]', description: 'Copy an item without its connections into another workspace, optionally inside one of its containers.' },
+                          { command: 'mv <item name> <container name>', description: 'Move an item into a container in the current workspace.' },
+                          { command: 'mv <item name> <workspace name> [container name]', description: 'Move an item into another workspace, optionally inside one of its containers.' },
+                          { command: 'ren <item name> <new name>', description: 'Rename an item or component element.' },
+                          { command: 'del <item name>', description: 'Delete an item or component element.' },
+                          { command: 'conn <component.element> <component.element>', description: 'Create a connection between matching endpoints.' },
+                          { command: 'delconn <component.element> <component.element>', description: 'Delete a connection between endpoints.' },
+                          { command: 'workspace <name>', description: 'Create a new workspace and switch to it.' },
+                          { command: 'undo / redo', description: 'Undo or redo the last workspace action.' },
+                          { command: 'start / pause / stop / restart', description: 'Control workspace execution from the command line.' },
+                          { title: 'Quoting names', description: 'Wrap names with spaces in quotes when typing commands, for example "Engine Block".' },
+                      ],
+                  },
+                  {
+                      title: 'About',
+                      entries: [
+                          { title: 'Dependencies', description: 'This app uses Konva for canvas rendering and interaction, along with standard browser APIs for clipboard, files, and workspace behavior.' },
+                          { title: 'Third-party software', description: 'Konva and any other third-party libraries remain the property of their respective authors and rights holders and are subject to their own licenses.' },
+                          { title: 'Rights reserved', description: 'All rights reserved for this application and its original content unless otherwise noted.' },
+                      ],
+                  },
+                  {
+                      title: 'Disclaimer',
+                      entries: [
+                          { title: 'Important', description: 'All components and events in this program, even those based on real systems, are entirely fictional. All system behavior is simulated... poorly. The following program contains course software code and due to its content it should not be used by anyone.' },
+                      ],
+                  },
+              ],
+          };
+          const german = {
+              compactSample: {
+                  title: 'Kompaktes Beispielmodell',
+                  description: 'Lade einen kompakten Demo-Workspace mit einer externen Bedienkomponente, einem Container mit zwei Komponenten und Hilfstext sowie einem Control Panel, das Nachrichtenfluss, Eigenschaftsweitergabe und auf dem Container hervorgehobene Eigenschaften zeigt.',
+                  buttonLabel: 'Kompakte Demo laden',
+                  searchLabel: 'Modell laden',
+              },
+              llmImportPrompt: {
+                  title: 'LLM-Importprompt',
+                  description: 'Kopiere einen kompakten maschinenlesbaren Prompt fur ein LLM. Er erklart, wie eine Benutzerbeschreibung in importierbares JigBox-Projekt-JSON umgewandelt wird, und enthalt das erforderliche Dateiformat.',
+                  buttonLabel: 'Importprompt kopieren',
+              },
+              sections: [
+                  {
+                      title: 'Was Diese App Tut',
+                      entries: [
+                          { title: 'Systeme visuell modellieren', description: 'Baue Diagramme aus Komponenten, Textelementen und Containern, um Teile eines Systems und ihre Beziehungen darzustellen.' },
+                          { title: 'Verhalten und Fluss simulieren', description: 'Gib Komponenten Eigenschaften, Kanale, Timer und Trigger, verbinde sie miteinander und starte den Workspace, um Werte und Nachrichten durch das Modell wandern zu sehen.' },
+                          { title: 'Iterieren, speichern und wiederverwenden', description: 'Bearbeite Komponentenlogik, organisiere mehrere Workspaces, speichere Projekte als JSON und halte wiederverwendbare Bausteine in der Bibliothek bereit.' },
+                      ],
+                  },
+                  {
+                      title: 'Erste Schritte',
+                      entries: [
+                          { title: 'Auf der Zeichenflache bauen', description: 'Nutze die Erstellen-Schaltflachen, um Komponenten, Textelemente und Container hinzuzufugen, sie zu platzieren und passende Eigenschaften oder Kanale zu verbinden.' },
+                          { title: 'Auswahlen untersuchen', description: 'Wahle ein Element aus, um seine Details im Inspektor und bei Komponenten sein Verhalten im Codefenster zu bearbeiten.' },
+                          { title: 'Starten und anpassen', description: 'Starte, pausiere, stoppe oder starte die Ausfuhrung uber die Symbolleiste neu und beobachte die Ergebnisse in Log- und Control-Panels-Fenstern.' },
+                      ],
+                  },
+                  {
+                      title: 'Bausteine Von Komponenten',
+                      entries: [
+                          { title: 'Eigenschaften', description: 'Eigenschaften halten benannte Werte an einer Komponente, zum Beispiel Zahlen, Text oder Status. Nutze sie fur Zustand und fur Wert-zu-Wert-Verbindungen.' },
+                          { title: 'Kanale', description: 'Kanale transportieren gesendete Nachrichten oder Pakete zwischen Komponenten. Nutze sie, wenn eine Komponente aktiv Daten oder Ereignisse an eine andere senden soll.' },
+                          { title: 'Timer', description: 'Timer werden in Intervallen ausgelost und lassen eine Komponente wiederholt Code ausfuhren, etwa als Heartbeat, Poller oder geplantes Update.' },
+                          { title: 'Trigger', description: 'Trigger sind benannte Aktionen, die du manuell oder aus anderer Logik auslosen kannst, um eine Reaktion der Komponente bei Bedarf auszufuhren.' },
+                      ],
+                  },
+                  {
+                      title: 'Projekt Und Workspace',
+                      entries: [
+                          { title: 'Auswahl-Inspektor', description: 'Nutze den Inspektor, um Projekt oder aktiven Workspace umzubenennen, Beschreibungen zu bearbeiten, Canvas-Farben anzupassen und Fensterlayouts zuruckzusetzen.' },
+                          { title: 'Einstellungen', description: 'Nutze die Einstellungs-Schaltflache, um App-Design, Oberflachengrosse und Hervorhebungsverhalten des Workspaces zu andern.' },
+                          { title: 'Workspace-Umschalter', description: 'Nutze das Dropdown in der Symbolleiste, um Workspaces zu wechseln, und die + Schaltflache, um einen neuen zu erstellen.' },
+                      ],
+                  },
+                  {
+                      title: 'Bibliothek Und Persistenz',
+                      entries: [
+                          { title: 'Bibliothek', description: 'Organisiere wiederverwendbare Inhalte in Projektbibliotheken, durchsuche jede Bibliothek in einer filterbaren Baumansicht und ziehe oder fugen gespeicherte Elemente spater wieder auf die Zeichenflache.' },
+                          { title: 'Projektdaten', description: 'Speichere das aktuelle Projekt in diesem Browser oder in die Zwischenablage, lade es als JSON herunter oder lade eingefugtes JSON wieder ins Projekt.' },
+                          { title: 'Dateiablage', description: 'Ziehe eine .json-Projektdatei irgendwo auf die Zeichenflache, um sie uber den Persistenz-Workflow zu laden.' },
+                      ],
+                  },
+                  {
+                      title: 'Fenster',
+                      entries: [
+                          { title: 'Navigator', description: 'Durchsuche den Komponenten- und Containerbaum und fokussiere oder wahle dann ein beliebiges Element im Workspace aus.' },
+                          { title: 'Inspektor', description: 'Verwalte Eigenschaften, Kanale, Timer, Trigger und weitere Details fur das ausgewahlte Element.' },
+                          { title: 'Code', description: 'Bearbeite Komponentenverhalten und nutze Vervollstandigungshinweise beim Schreiben von Code.' },
+                          { title: 'Log', description: 'Prufe Meldungen, Laufzeitausgaben und Statusruckmeldungen aus Workspace-Aktionen.' },
+                          { title: 'Control Panels', description: 'Erstelle operatorartige Bedienfelder fur die wichtigsten Eigenschaften, Timer und Trigger.' },
+                          { title: 'Befehlszeile', description: 'Fuhre schnelle Befehle zum Erstellen, Umbenennen, Loschen, Verschieben, Verbinden, Ruckgangigmachen und Wiederholen aus.' },
+                      ],
+                  },
+                  {
+                      title: 'Befehlszeilenbefehle',
+                      entries: [
+                          { command: 'help', description: 'Zeigt die verfugbaren Befehlszeilenbefehle an.' },
+                          { command: 'comp <name>', description: 'Erstellt eine neue Komponente.' },
+                          { command: 'cont <name>', description: 'Erstellt einen neuen Container.' },
+                          { command: 'chan <component name> <new channel name>', description: 'Fugt einer Komponente einen Kanal hinzu.' },
+                          { command: 'prop <component name> <new property name>', description: 'Fugt einer Komponente eine Eigenschaft hinzu.' },
+                          { command: 'tim <component name> <new timer name>', description: 'Fugt einer Komponente einen Timer hinzu.' },
+                          { command: 'trig <component name> <new trigger name>', description: 'Fugt einer Komponente einen Trigger hinzu.' },
+                          { command: 'lib <component name>', description: 'Speichert eine Komponente in der Bibliothek.' },
+                          { command: 'lib <container name>', description: 'Speichert einen Container-Unterbaum in der Bibliothek.' },
+                          { command: 'cp <item name>', description: 'Kopiert ein Element ohne seine Verbindungen in den aktuellen Workspace.' },
+                          { command: 'cp <item name> <container name>', description: 'Kopiert ein Element ohne seine Verbindungen in einen Container im aktuellen Workspace.' },
+                          { command: 'cp <item name> <workspace name> [container name]', description: 'Kopiert ein Element ohne seine Verbindungen in einen anderen Workspace, optional in einen seiner Container.' },
+                          { command: 'mv <item name> <container name>', description: 'Verschiebt ein Element in einen Container im aktuellen Workspace.' },
+                          { command: 'mv <item name> <workspace name> [container name]', description: 'Verschiebt ein Element in einen anderen Workspace, optional in einen seiner Container.' },
+                          { command: 'ren <item name> <new name>', description: 'Benennt ein Element oder Komponentenelement um.' },
+                          { command: 'del <item name>', description: 'Loscht ein Element oder Komponentenelement.' },
+                          { command: 'conn <component.element> <component.element>', description: 'Erstellt eine Verbindung zwischen passenden Endpunkten.' },
+                          { command: 'delconn <component.element> <component.element>', description: 'Loscht eine Verbindung zwischen Endpunkten.' },
+                          { command: 'workspace <name>', description: 'Erstellt einen neuen Workspace und wechselt zu ihm.' },
+                          { command: 'undo / redo', description: 'Macht die letzte Workspace-Aktion ruckgangig oder wiederholt sie.' },
+                          { command: 'start / pause / stop / restart', description: 'Steuert die Workspace-Ausfuhrung uber die Befehlszeile.' },
+                          { title: 'Namen mit Leerzeichen', description: 'Setze Namen mit Leerzeichen beim Eingeben von Befehlen in Anfuhrungszeichen, zum Beispiel "Engine Block".' },
+                      ],
+                  },
+                  {
+                      title: 'Info',
+                      entries: [
+                          { title: 'Abhangigkeiten', description: 'Diese App nutzt Konva fur Canvas-Darstellung und Interaktion sowie Standard-Browser-APIs fur Zwischenablage, Dateien und Workspace-Verhalten.' },
+                          { title: 'Drittanbieter-Software', description: 'Konva und andere Drittanbieter-Bibliotheken bleiben Eigentum ihrer jeweiligen Autorinnen, Autoren und Rechteinhaber und unterliegen ihren eigenen Lizenzen.' },
+                          { title: 'Alle Rechte vorbehalten', description: 'Alle Rechte fur diese Anwendung und ihre ursprunglichen Inhalte bleiben vorbehalten, sofern nicht anders angegeben.' },
+                      ],
+                  },
+                  {
+                      title: 'Haftungsausschluss',
+                      entries: [
+                          { title: 'Wichtig', description: 'Alle Komponenten und Ereignisse in diesem Programm, auch wenn sie auf realen Systemen basieren, sind vollstandig fiktiv. Das gesamte Systemverhalten ist simuliert... und zwar eher schlecht. Das folgende Programm enthalt Kurssoftware-Code und sollte aufgrund seines Inhalts von niemandem verwendet werden.' },
+                      ],
+                  },
+              ],
+          };
+          return language === 'de' ? german : english;
       }
   
       scrollHelpPanelToTop() {
@@ -21441,15 +22299,16 @@
           }
       }
   
-      createLlmImportPromptCard() {
-          const card = this.panelHelper.createSectionCard('LLM Import Prompt');
+      createLlmImportPromptCard(content = null) {
+          const localizedContent = content ?? this.getHelpContent().llmImportPrompt;
+          const card = this.panelHelper.createSectionCard(localizedContent.title);
           card.body.classList.add('dp-section-body-spaced');
   
           const description = this.panelHelper.createElement('div', 'dp-help-entry-description');
-          description.innerText = 'Copy a compact machine-readable prompt for an LLM. It explains how to turn a user project description into importable JigBox project JSON and includes the required file format.';
+          description.innerText = localizedContent.description;
   
           const actions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          const copyButton = this.panelHelper.makeButton('secondary', `${ButtonSymbols.sparkle} Copy Import Prompt`, async () => {
+          const copyButton = this.panelHelper.makeButton('secondary', `${ButtonSymbols.sparkle} ${localizedContent.buttonLabel}`, async () => {
               await this.copyLlmImportPromptToClipboard();
           });
           actions.appendChild(copyButton);
@@ -21457,21 +22316,22 @@
           card.body.appendChild(description);
           card.body.appendChild(actions);
           this.registerHelpSearchCard(card, [
-              { element: this.getHelpCardTitleElement(card), text: 'LLM Import Prompt' },
+              { element: this.getHelpCardTitleElement(card), text: localizedContent.title },
               { element: description, text: description.innerText },
           ]);
           return card;
       }
   
-      createCompactHelpSampleCard() {
-          const card = this.panelHelper.createSectionCard('Compact Sample Model');
+      createCompactHelpSampleCard(content = null) {
+          const localizedContent = content ?? this.getHelpContent().compactSample;
+          const card = this.panelHelper.createSectionCard(localizedContent.title);
           card.body.classList.add('dp-section-body-spaced');
   
           const description = this.panelHelper.createElement('div', 'dp-help-entry-description');
-          description.innerText = 'Load a compact demo workspace with one outside operator component, a container holding two components and helper text, plus a control panel that shows message passing, property propagation, and promoted container properties.';
+          description.innerText = localizedContent.description;
   
           const actions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          const loadButton = this.panelHelper.makeButton('secondary', `${ButtonSymbols.sparkle} Load Compact Demo`, () => {
+          const loadButton = this.panelHelper.makeButton('secondary', `${ButtonSymbols.sparkle} ${localizedContent.buttonLabel}`, () => {
               this.loadCompactHelpSampleWorkspace();
           });
           actions.appendChild(loadButton);
@@ -21479,9 +22339,9 @@
           card.body.appendChild(description);
           card.body.appendChild(actions);
           this.registerHelpSearchCard(card, [
-              { element: this.getHelpCardTitleElement(card), text: 'Compact Sample Model' },
+              { element: this.getHelpCardTitleElement(card), text: localizedContent.title },
               { element: description, text: description.innerText },
-              { element: loadButton, text: 'Load Model' },
+              { element: loadButton, text: localizedContent.searchLabel },
           ]);
           return card;
       }
@@ -21528,12 +22388,12 @@
                   this.helpPanel?.dockTo?.(options.helpDockSide ?? 'right');
                   this.helpPanel?.open?.();
               }
-              this.setStatus('Loaded compact help demo workspace. Press Start to watch the timer drive messages.');
+              this.setStatus(this.t('status.loadedCompactHelpDemo'));
               return true;
           } catch (error) {
               console.error('Failed to load compact help sample workspace.', error);
               this.helpPanel.open();
-              this.setStatus(error.message || 'Compact help demo load failed.');
+              this.setStatus(error.message || this.t('status.compactHelpDemoLoadFailed'));
               return false;
           }
       }
@@ -21727,7 +22587,7 @@
               workspaces: [
                   {
                       id: 1,
-                      name: `${Project.defaultWorkspaceBaseName} 1`,
+                      name: `${Project.getDefaultWorkspaceBaseName()} 1`,
                       description: '',
                       snapshot: {
                           version: WorkspacePersistence.version,
@@ -21747,7 +22607,7 @@
               libraries: [
                   {
                       id: 1,
-                      name: Project.defaultLibraryBaseName,
+                      name: Project.getDefaultLibraryBaseName(),
                       entries: [],
                   },
               ],
@@ -22039,19 +22899,19 @@
                       throw new Error('document.execCommand("copy") returned false.');
                   }
               }
-              this.setStatus('Copied LLM import prompt to clipboard.');
+              this.setStatus(this.t('status.copiedLlmImportPrompt'));
           } catch (error) {
               console.error('Failed to copy LLM import prompt.', error);
-              this.setStatus('Copy import prompt failed.');
+              this.setStatus(this.t('status.copyLlmImportPromptFailed'));
           }
       }
   
       buildHighlightingCard() {
-          const highlightingCard = this.panelHelper.createSectionCard('Highlighting');
+          const highlightingCard = this.panelHelper.createSectionCard(this.t('settings.highlighting'));
   
           this.componentHighlightingToggle = this.createSettingToggleRow(
-              'Component and Container Highlighting',
-              'Show packet-activity highlighting for components, containers, properties, channels, and their connections.',
+              this.t('settings.componentHighlighting'),
+              this.t('settings.componentHighlightingDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       enableComponentHighlighting: nextValue,
@@ -22060,8 +22920,8 @@
           );
   
           this.connectorHighlightingToggle = this.createSettingToggleRow(
-              'Connector Highlighting',
-              'Show connector hover and preview highlighting while wiring channels and properties together.',
+              this.t('settings.connectorHighlighting'),
+              this.t('settings.connectorHighlightingDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       enableConnectorHighlighting: nextValue,
@@ -22075,11 +22935,11 @@
       }
   
       buildCanvasInteractionCard() {
-          const canvasCard = this.panelHelper.createSectionCard('Canvas');
+          const canvasCard = this.panelHelper.createSectionCard(this.t('settings.canvas'));
   
           this.gridSnappingToggle = this.createSettingToggleRow(
-              'Grid Snapping',
-              'Snap dragging and resizing to half-grid steps (20px). Disabled by default.',
+              this.t('settings.gridSnapping'),
+              this.t('settings.gridSnappingDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       enableGridSnapping: nextValue,
@@ -22092,11 +22952,11 @@
       }
   
       buildStartupCard() {
-          const startupCard = this.panelHelper.createSectionCard('Startup');
+          const startupCard = this.panelHelper.createSectionCard(this.t('settings.startup'));
   
           this.showIntroPageOnStartupToggle = this.createSettingToggleRow(
-              'Opening Page',
-              'Show the welcome screen with quick-start project choices each time the app loads.',
+              this.t('settings.openingPage'),
+              this.t('settings.openingPageDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showIntroPageOnStartup: nextValue,
@@ -22109,11 +22969,11 @@
       }
   
       buildFeatureGatesCard() {
-          const featureGatesCard = this.panelHelper.createSectionCard('Feature Gates');
+          const featureGatesCard = this.panelHelper.createSectionCard(this.t('settings.featureGates'));
   
           this.libraryWindowVisibilityToggle = this.createSettingToggleRow(
-              'Library Window',
-              'Show the Library window button in the toolbar menu.',
+              this.t('settings.libraryWindow'),
+              this.t('settings.libraryWindowDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showLibraryWindowInToolbar: nextValue,
@@ -22122,8 +22982,8 @@
           );
   
           this.projectDataPanelVisibilityToggle = this.createSettingToggleRow(
-              'Project Data Panel',
-              'Show the Project Data save and load section inside the Persistence window.',
+              this.t('settings.projectDataPanel'),
+              this.t('settings.projectDataPanelDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showProjectDataWindowInToolbar: nextValue,
@@ -22132,8 +22992,8 @@
           );
   
           this.logWindowVisibilityToggle = this.createSettingToggleRow(
-              'Log Window',
-              'Show the Log window button in the toolbar menu.',
+              this.t('settings.logWindow'),
+              this.t('settings.logWindowDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showLogWindowInToolbar: nextValue,
@@ -22142,8 +23002,8 @@
           );
   
           this.cliWindowVisibilityToggle = this.createSettingToggleRow(
-              'CLI Window',
-              'Show the CLI window button in the toolbar menu.',
+              this.t('settings.cliWindow'),
+              this.t('settings.cliWindowDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showCliWindowInToolbar: nextValue,
@@ -22152,8 +23012,8 @@
           );
   
           this.controlPanelsWindowVisibilityToggle = this.createSettingToggleRow(
-              'Control Panels Window',
-              'Show the Control Panels window button in the toolbar menu.',
+              this.t('settings.controlPanelsWindow'),
+              this.t('settings.controlPanelsWindowDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showControlPanelsWindowInToolbar: nextValue,
@@ -22162,8 +23022,8 @@
           );
   
           this.workspaceSelectorVisibilityToggle = this.createSettingToggleRow(
-              'Workspace Selector',
-              'Show the workspace selector and add workspace button in the toolbar.',
+              this.t('settings.workspaceSelector'),
+              this.t('settings.workspaceSelectorDescription'),
               (nextValue) => {
                   this.appSettings.setSettings({
                       showWorkspaceSelector: nextValue,
@@ -22204,6 +23064,88 @@
           return {
               row,
               toggle,
+              heading,
+              body,
+              setLabels: (nextTitle, nextDescription) => {
+                  heading.innerText = nextTitle;
+                  body.innerText = nextDescription;
+                  toggle.element.setAttribute('aria-label', nextTitle);
+              },
+          };
+      }
+  
+      createSelectSettingRow(title, description, choices, config = {}) {
+          const {
+              normalizeValue = (value) => value,
+              getAriaLabel = () => title,
+              initialValue = null,
+              onValueChange = null,
+          } = config;
+          let normalizeValueFunc = normalizeValue;
+          let getAriaLabelFunc = getAriaLabel;
+          const row = this.panelHelper.createElement('div', 'dp-settings-row');
+          const copy = this.panelHelper.createElement('div', 'dp-settings-copy');
+          const heading = this.panelHelper.createElement('div', 'dp-settings-title');
+          const body = this.panelHelper.createElement('div', 'dp-settings-description');
+          const controls = this.panelHelper.createElement('div', 'dp-settings-control');
+          const select = this.panelHelper.createElement('select', 'dp-input dp-settings-select');
+          let currentValue = initialValue ?? choices[0]?.value ?? '';
+  
+          heading.innerText = title;
+          body.innerText = description;
+          copy.appendChild(heading);
+          copy.appendChild(body);
+          row.appendChild(copy);
+          row.appendChild(controls);
+          controls.appendChild(select);
+  
+          select.addEventListener('change', () => {
+              onValueChange?.(select.value);
+          });
+  
+          const setChoices = (nextChoices, nextConfig = {}) => {
+              normalizeValueFunc = nextConfig.normalizeValue ?? normalizeValueFunc;
+              getAriaLabelFunc = nextConfig.getAriaLabel ?? getAriaLabelFunc;
+              select.replaceChildren();
+              nextChoices.forEach((option) => {
+                  const optionElement = document.createElement('option');
+                  optionElement.value = String(option.value ?? '');
+                  optionElement.innerText = option.label ?? '';
+                  select.appendChild(optionElement);
+              });
+              select.setAttribute('aria-label', getAriaLabelFunc());
+              setValue(currentValue);
+          };
+  
+          const setLabels = (nextTitle, nextDescription) => {
+              heading.innerText = nextTitle;
+              body.innerText = nextDescription;
+          };
+  
+          const setValue = (nextValue) => {
+              const normalizedValue = normalizeValueFunc(nextValue);
+              currentValue = normalizedValue;
+              const matchingValue = Array.from(select.options).some((option) => option.value === String(normalizedValue))
+                  ? String(normalizedValue)
+                  : String(select.options[0]?.value ?? '');
+              if (select.value !== matchingValue) {
+                  select.value = matchingValue;
+              }
+          };
+  
+          setChoices(choices, {
+              normalizeValue,
+              getAriaLabel,
+          });
+  
+          return {
+              row,
+              heading,
+              body,
+              select,
+              setLabels,
+              setChoices,
+              setValue,
           };
       }
   
@@ -22215,6 +23157,10 @@
               initialValue = null,
               onValueChange = null,
           } = config;
+          let normalizeValueFunc = normalizeValue;
+          let formatValueFunc = formatValue;
+          let getAriaLabelFunc = getAriaLabel;
+          let currentValue = initialValue ?? choices[0]?.value;
           const row = this.panelHelper.createElement('div', 'dp-settings-row');
           row.classList.add('dp-settings-row-stacked');
           const copy = this.panelHelper.createElement('div', 'dp-settings-copy');
@@ -22241,7 +23187,7 @@
               });
               button.classList.add('dp-settings-choice');
               button.type = 'button';
-              button.setAttribute('aria-label', getAriaLabel(option));
+              button.setAttribute('aria-label', getAriaLabelFunc(option));
               button.setAttribute('aria-pressed', 'false');
               choiceGroup.appendChild(button);
               choiceButtons.push({
@@ -22252,10 +23198,11 @@
           });
   
           const setValue = (nextValue) => {
-              const normalizedValue = normalizeValue(nextValue);
+              const normalizedValue = normalizeValueFunc(nextValue);
+              currentValue = normalizedValue;
               const activeChoice = choiceButtons.find((choice) => choice.value === normalizedValue);
   
-              value.innerText = formatValue(normalizedValue, activeChoice);
+              value.innerText = formatValueFunc(normalizedValue, activeChoice);
               choiceButtons.forEach((choice) => {
                   const isActive = choice.value === normalizedValue;
                   choice.button.classList.toggle('is-active', isActive);
@@ -22263,41 +23210,86 @@
               });
           };
   
-          setValue(initialValue ?? choices[0]?.value);
+          const setLabels = (nextTitle, nextDescription) => {
+              heading.innerText = nextTitle;
+              body.innerText = nextDescription;
+          };
+  
+          const setChoices = (nextChoices, nextConfig = {}) => {
+              normalizeValueFunc = nextConfig.normalizeValue ?? normalizeValueFunc;
+              formatValueFunc = nextConfig.formatValue ?? formatValueFunc;
+              getAriaLabelFunc = nextConfig.getAriaLabel ?? getAriaLabelFunc;
+  
+              nextChoices.forEach((option, index) => {
+                  const choice = choiceButtons[index];
+                  if (!choice) return;
+                  choice.value = option.value;
+                  choice.label = option.label;
+                  choice.button.innerText = option.label;
+                  choice.button.setAttribute('aria-label', getAriaLabelFunc(option));
+              });
+              setValue(currentValue);
+          };
+  
+          setValue(currentValue);
   
           return {
               row,
               value,
               choiceButtons,
+              heading,
+              body,
               setValue,
+              setLabels,
+              setChoices,
           };
       }
   
       createThemeModeRow(title, description, onThemeChange) {
           const themeModeOptions = Workspace.themeModeOptions.map((optionValue) => ({
               value: optionValue,
-              label: optionValue === 'dark' ? 'Dark' : 'Default',
+              label: optionValue === 'dark' ? this.t('settings.themeDark') : this.t('settings.themeDefault'),
           }));
   
           return this.createChoiceSettingRow(title, description, themeModeOptions, {
               normalizeValue: (value) => Workspace.normalizeThemeModeValue(value),
-              formatValue: (value, activeChoice) => activeChoice?.label ?? (value === 'dark' ? 'Dark' : 'Default'),
-              getAriaLabel: (choice) => `${choice.label} interface theme`,
+              formatValue: (value, activeChoice) => activeChoice?.label ?? (value === 'dark' ? this.t('settings.themeDark') : this.t('settings.themeDefault')),
+              getAriaLabel: (choice) => this.t('settings.themeAria', { label: choice.label }),
               initialValue: this.appSettings.getSettings?.()?.themeMode ?? Workspace.defaultThemeMode,
               onValueChange: onThemeChange,
+          });
+      }
+  
+      createLanguageRow(title, description, onLanguageChange) {
+          const languageOptions = globalThis.DoublePhiI18n?.getLanguageOptions?.() ?? [
+              { value: 'en', label: 'English' },
+          ];
+  
+          return this.createSelectSettingRow(title, description, languageOptions, {
+              normalizeValue: (value) => globalThis.DoublePhiI18n?.normalizeLanguage?.(value) ?? 'en',
+              getAriaLabel: () => this.t('settings.languageSelectAria'),
+              initialValue: this.appSettings.getSettings?.()?.language ?? 'en',
+              onValueChange: onLanguageChange,
           });
       }
   
       createInterfaceScaleRow(title, description, onScaleChange) {
           const interfaceScaleOptions = Workspace.interfaceScaleOptions.map((optionValue, index) => ({
               value: optionValue,
-              label: index === 0 ? 'Large' : index === 1 ? 'Medium' : 'Small',
+              label: index === 0
+                  ? this.t('settings.interfaceLarge')
+                  : index === 1
+                      ? this.t('settings.interfaceMedium')
+                      : this.t('settings.interfaceSmall'),
           }));
   
           return this.createChoiceSettingRow(title, description, interfaceScaleOptions, {
               normalizeValue: (value) => Workspace.normalizeInterfaceScaleValue(value),
-              formatValue: (value, activeChoice) => `${activeChoice?.label ?? 'Large'} (${Math.round(value * 100)}%)`,
-              getAriaLabel: (choice) => `${choice.label} interface size`,
+              formatValue: (value, activeChoice) => this.t('settings.interfacePercent', {
+                  label: activeChoice?.label ?? this.t('settings.interfaceLarge'),
+                  percent: Math.round(value * 100),
+              }),
+              getAriaLabel: (choice) => this.t('settings.interfaceSizeAria', { label: choice.label }),
               initialValue: this.appSettings.getSettings?.()?.interfaceScale ?? Workspace.defaultInterfaceScale,
               onValueChange: onScaleChange,
           });
@@ -22311,7 +23303,7 @@
   
           return this.createChoiceSettingRow(title, description, presetChoices, {
               normalizeValue: (value) => Project.getColorSchemePreset(value)?.id ?? null,
-              formatValue: (value, activeChoice) => activeChoice?.label ?? 'Custom',
+              formatValue: (value, activeChoice) => activeChoice?.label ?? this.t('settings.custom'),
               getAriaLabel: (choice) => `${choice.label} canvas color scheme`,
               initialValue: Project.getMatchingColorSchemeId(
                   this.projectController.getProjectSettings?.(),
@@ -22437,29 +23429,31 @@
       createToolbar() {
           const toolbar = this.panelHelper.createElement('div', 'dp-topbar');
   
-          const persistenceGroup = this.createToolbarGroup('Persistence');
-          this.btnPersistencePanel = this.makeToolbarButton(ButtonSymbols.persistence, 'Open persistence window', () => {
+          const persistenceGroup = this.createToolbarGroup(this.t('toolbar.persistence'));
+          this.persistenceToolbarGroup = persistenceGroup;
+          this.btnPersistencePanel = this.makeToolbarButton(ButtonSymbols.persistence, this.t('toolbar.openPersistence'), () => {
               this.persistencePanel.open();
           });
           persistenceGroup.appendChild(this.btnPersistencePanel);
   
-          const workspaceProjectGroup = this.createToolbarGroup('Project and workspace');
-          this.btnSettingsPanel = this.makeToolbarButton(ButtonSymbols.settings, 'Open settings window', () => {
+          const workspaceProjectGroup = this.createToolbarGroup(this.t('toolbar.projectWorkspace'));
+          this.workspaceProjectToolbarGroup = workspaceProjectGroup;
+          this.btnSettingsPanel = this.makeToolbarButton(ButtonSymbols.settings, this.t('toolbar.openSettings'), () => {
               this.settingsPanel.open();
           });
-          this.btnNavigatorPanel = this.makeToolbarButton(ButtonSymbols.navigator, 'Open navigator window', () => {
+          this.btnNavigatorPanel = this.makeToolbarButton(ButtonSymbols.navigator, this.t('toolbar.openNavigator'), () => {
               this.workspaceNavigatorPanel.panel.open();
           });
           this.workspaceToolbarSelect = document.createElement('select');
           this.workspaceToolbarSelect.className = 'dp-input dp-topbar-select';
-          this.workspaceToolbarSelect.setAttribute('aria-label', 'Switch workspace');
+          this.workspaceToolbarSelect.setAttribute('aria-label', this.t('toolbar.switchWorkspace'));
           this.workspaceToolbarSelect.addEventListener('change', () => {
               this.handleWorkspaceSwitch(this.workspaceToolbarSelect.value);
           });
-          this.btnAddWorkspace = this.makeToolbarButton(ButtonSymbols.add, 'Add workspace', () => {
+          this.btnAddWorkspace = this.makeToolbarButton(ButtonSymbols.add, this.t('toolbar.addWorkspace'), () => {
               this.handleAddWorkspace();
           });
-          this.btnLibraryPanel = this.makeToolbarButton(ButtonSymbols.library, 'Open library window', () => {
+          this.btnLibraryPanel = this.makeToolbarButton(ButtonSymbols.library, this.t('toolbar.openLibrary'), () => {
               this.libraryPanel.open();
           });
           workspaceProjectGroup.appendChild(this.btnSettingsPanel);
@@ -22468,17 +23462,18 @@
           workspaceProjectGroup.appendChild(this.btnAddWorkspace);
           workspaceProjectGroup.appendChild(this.btnLibraryPanel);
   
-          const executionGroup = this.createToolbarGroup('Execution');
-          this.btnStopExecution = this.makeToolbarButton(ButtonSymbols.stop, 'Stop execution', () => {
+          const executionGroup = this.createToolbarGroup(this.t('toolbar.execution'));
+          this.executionToolbarGroup = executionGroup;
+          this.btnStopExecution = this.makeToolbarButton(ButtonSymbols.stop, this.t('toolbar.stopExecution'), () => {
               this.workspace.stopExecution();
           });
-          this.btnPauseExecution = this.makeToolbarButton(ButtonSymbols.pause, 'Pause execution', () => {
+          this.btnPauseExecution = this.makeToolbarButton(ButtonSymbols.pause, this.t('toolbar.pauseExecution'), () => {
               this.workspace.pauseExecution();
           });
-          this.btnStartExecution = this.makeToolbarButton(ButtonSymbols.play, 'Start execution', () => {
+          this.btnStartExecution = this.makeToolbarButton(ButtonSymbols.play, this.t('toolbar.startExecution'), () => {
               this.workspace.startExecution();
           });
-          this.btnRestartExecution = this.makeToolbarButton(ButtonSymbols.restart, 'Restart execution', () => {
+          this.btnRestartExecution = this.makeToolbarButton(ButtonSymbols.restart, this.t('toolbar.restartExecution'), () => {
               this.workspace.restartExecution();
           });
           executionGroup.appendChild(this.btnStopExecution);
@@ -22486,13 +23481,14 @@
           executionGroup.appendChild(this.btnStartExecution);
           executionGroup.appendChild(this.btnRestartExecution);
   
-          const createGroup = this.createToolbarGroup('Create');
+          const createGroup = this.createToolbarGroup(this.t('toolbar.create'));
+          this.createToolbarGroupElement = createGroup;
           createGroup.classList.add('dp-topbar-group-create');
           const createStrip = this.panelHelper.createElement('div', 'dp-toolbar-create-strip');
           this.btnAddComponent = this.makeCreateToolbarButton(
               ButtonSymbols.component,
-              'Add component',
-              'Component',
+              this.t('toolbar.addComponent'),
+              this.t('toolbar.component'),
               'component',
               () => {
                   this.workspace.addNewBlankComponent();
@@ -22500,8 +23496,8 @@
           );
           this.btnAddContainer = this.makeCreateToolbarButton(
               ButtonSymbols.container,
-              'Add container',
-              'Container',
+              this.t('toolbar.addContainer'),
+              this.t('toolbar.container'),
               'container',
               () => {
                   this.workspace.addNewBlankContainer();
@@ -22509,8 +23505,8 @@
           );
           this.btnAddTextItem = this.makeCreateToolbarButton(
               ButtonSymbols.text,
-              'Add text item',
-              'Text',
+              this.t('toolbar.addTextItem'),
+              this.t('toolbar.text'),
               'text',
               () => {
                   this.workspace.addNewBlankTextItem();
@@ -22521,20 +23517,21 @@
           createStrip.appendChild(this.btnAddTextItem);
           createGroup.appendChild(createStrip);
   
-          const windowGroup = this.createToolbarGroup('Windows');
-          this.btnCodePanel = this.makeToolbarButton(ButtonSymbols.code, 'Open code window', () => {
+          const windowGroup = this.createToolbarGroup(this.t('toolbar.windows'));
+          this.windowsToolbarGroup = windowGroup;
+          this.btnCodePanel = this.makeToolbarButton(ButtonSymbols.code, this.t('toolbar.openCode'), () => {
               this.codePanel.panel.open();
           });
-          this.btnInspectorPanel = this.makeToolbarButton(ButtonSymbols.inspect, 'Open inspector window', () => {
+          this.btnInspectorPanel = this.makeToolbarButton(ButtonSymbols.inspect, this.t('toolbar.openInspector'), () => {
               this.componentPanel.panel.open();
           });
-          this.btnLoggerPanel = this.makeToolbarButton(ButtonSymbols.log, 'Open log window', () => {
+          this.btnLoggerPanel = this.makeToolbarButton(ButtonSymbols.log, this.t('toolbar.openLog'), () => {
               this.loggerPanel.panel.open();
           });
-          this.btnControlPanels = this.makeToolbarButton(ButtonSymbols.controlPanels, 'Open control panels list', () => {
+          this.btnControlPanels = this.makeToolbarButton(ButtonSymbols.controlPanels, this.t('toolbar.openControlPanels'), () => {
               this.controlPanelsPanel.panel.open();
           });
-          this.btnCommandLine = this.makeToolbarButton(ButtonSymbols.commandLine, 'Toggle command line', () => {
+          this.btnCommandLine = this.makeToolbarButton(ButtonSymbols.commandLine, this.t('toolbar.toggleCommandLine'), () => {
               this.commandLinePanel.toggleVisible();
           });
           windowGroup.appendChild(this.btnInspectorPanel);
@@ -22543,8 +23540,9 @@
           windowGroup.appendChild(this.btnCodePanel);
           windowGroup.appendChild(this.btnCommandLine);
   
-          const helpGroup = this.createToolbarGroup('Help');
-          this.btnHelpPanel = this.makeToolbarButton(ButtonSymbols.help, 'Open help window', () => {
+          const helpGroup = this.createToolbarGroup(this.t('toolbar.help'));
+          this.helpToolbarGroup = helpGroup;
+          this.btnHelpPanel = this.makeToolbarButton(ButtonSymbols.help, this.t('toolbar.openHelp'), () => {
               this.helpPanel.open();
           });
           helpGroup.appendChild(this.btnHelpPanel);
@@ -22582,7 +23580,7 @@
   
       makeCreateToolbarButton(iconText, tooltip, labelText, itemType, onClick) {
           const button = this.makeToolbarButton(iconText, tooltip, onClick);
-          const dragTooltip = `${tooltip} or drag to canvas`;
+          const dragTooltip = this.t('toolbar.dragToCanvas', { tooltip });
           const icon = this.panelHelper.createElement('span', 'dp-toolbar-btn-icon');
           const text = this.panelHelper.createElement('span', 'dp-toolbar-btn-text');
           const grip = this.panelHelper.createElement('span', 'dp-toolbar-btn-grip');
@@ -22619,12 +23617,14 @@
           try {
               const didSwitch = this.projectController.switchWorkspace(Number(workspaceId));
               if (didSwitch) {
-                  this.setStatus(`Switched to ${this.projectController.getActiveWorkspaceName()}.`);
+                  this.setStatus(this.t('status.switchedWorkspace', {
+                      name: this.projectController.getActiveWorkspaceName(),
+                  }));
               }
               this.syncProjectUi();
           } catch (error) {
               console.error('Failed to switch workspace.', error);
-              this.setStatus(error.message || 'Workspace switch failed.');
+              this.setStatus(error.message || this.t('status.workspaceSwitchFailed'));
               this.syncWorkspaceSelectors();
           }
       }
@@ -22632,29 +23632,31 @@
       handleAddWorkspace() {
           try {
               const workspaceRecord = this.projectController.createWorkspace();
-              this.setStatus(`Created ${workspaceRecord.name}.`);
+              this.setStatus(this.t('status.createdWorkspace', {
+                  name: workspaceRecord.name,
+              }));
               this.syncProjectUi();
           } catch (error) {
               console.error('Failed to create workspace.', error);
-              this.setStatus(error.message || 'Workspace creation failed.');
+              this.setStatus(error.message || this.t('status.workspaceCreationFailed'));
           }
       }
   
       handleResetWindows() {
           try {
               this.projectController.resetWindowLayout();
-              this.setStatus('Reset windows for the active workspace.');
+              this.setStatus(this.t('status.resetWindows'));
               this.syncToolbarState();
           } catch (error) {
               console.error('Failed to reset windows.', error);
-              this.setStatus(error.message || 'Window reset failed.');
+              this.setStatus(error.message || this.t('status.windowResetFailed'));
           }
       }
   
       handleCaptureSelection() {
           const selection = this.getLibrarySelection();
           if (!selection?.library) {
-              this.setStatus('Select a library first.');
+              this.setStatus(this.t('status.selectLibraryFirst'));
               return;
           }
   
@@ -22917,6 +23919,7 @@
           const themeMode = this.applyThemeMode(nextSettings.themeMode);
           const interfaceScale = Workspace.normalizeInterfaceScaleValue(nextSettings.interfaceScale);
           Panel.setUiScale(interfaceScale);
+          this.languageSetting?.setValue?.(nextSettings.language);
           this.themeModeSetting?.setValue?.(themeMode);
           this.interfaceScaleSetting?.setValue?.(interfaceScale);
       }
@@ -22963,7 +23966,10 @@
           }
   
           if (this.projectSummary) {
-              this.projectSummary.innerText = `${workspaceSummaries.length} workspace${workspaceSummaries.length === 1 ? '' : 's'} in project.`;
+              this.projectSummary.innerText = this.t('summary.workspacesInProject', {
+                  count: workspaceSummaries.length,
+                  suffix: workspaceSummaries.length === 1 ? '' : 's',
+              });
           }
   
           this.syncProjectDisplaySettingsUi();
@@ -23876,14 +24882,14 @@
   
           if (!browserCacheAvailable) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Browser storage is unavailable in this session.';
+              emptyState.innerText = this.t('persistence.browserStorageUnavailable');
               this.browserLibraryList.appendChild(emptyState);
               return;
           }
   
           if (!savedLibraries.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Libraries saved from this project will appear here.';
+              emptyState.innerText = this.t('persistence.savedLibrariesEmpty');
               this.browserLibraryList.appendChild(emptyState);
               return;
           }
@@ -23951,14 +24957,14 @@
   
           if (!browserCacheAvailable) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Browser storage is unavailable in this session.';
+              emptyState.innerText = this.t('persistence.browserStorageUnavailable');
               this.browserCacheProjectList.appendChild(emptyState);
               return;
           }
   
           if (!savedProjects.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Projects saved in this browser will appear here.';
+              emptyState.innerText = this.t('persistence.savedProjectsEmpty');
               this.browserCacheProjectList.appendChild(emptyState);
               return;
           }
@@ -24891,7 +25897,7 @@
   
       renderProjectInspectorSelection(projectController, options = {}) {
           const { content: projectContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Project');
-          const projectName = projectController?.getProjectName?.() ?? Project.defaultName;
+          const projectName = projectController?.getProjectName?.() ?? Project.getDefaultName();
           const projectDescription = projectController?.getProjectDescription?.() ?? '';
           const nameInput = this.panelHelper.createInput(projectName, (value) => {
               options.onNameChange?.(value);
@@ -30272,12 +31278,25 @@
           this.savedProjectsCount = null;
           this.savedProjectsList = null;
           this.disableIntroCheckbox = null;
+          this.renderedLanguage = globalThis.DoublePhiI18n?.getLanguage?.() ?? 'en';
   
           this.build();
           this.appSettings?.observable?.addFieldListener?.('settings', (settings) => {
-              this.syncSettingsUi(settings);
+              const normalizedSettings = AppSettings.normalizeSettings(
+                  settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
+              );
+              if (normalizedSettings.language !== this.renderedLanguage) {
+                  globalThis.DoublePhiI18n?.setLanguage?.(normalizedSettings.language);
+                  this.renderedLanguage = normalizedSettings.language;
+                  this.refreshLanguageUi();
+              }
+              this.syncSettingsUi(normalizedSettings);
           }, this.appSettingsListenerKey);
           this.syncSettingsUi(this.appSettings?.getSettings?.());
+      }
+  
+      t(key, params = {}) {
+          return globalThis.DoublePhiI18n?.t?.(key, params) ?? key;
       }
   
       build() {
@@ -30293,15 +31312,18 @@
   
           const eyebrow = document.createElement('div');
           eyebrow.className = 'dp-startup-intro-eyebrow';
-          eyebrow.innerText = 'Welcome to Jigbox';
+          eyebrow.innerText = this.t('startup.welcomeEyebrow');
+          this.heroEyebrow = eyebrow;
   
           const title = document.createElement('h1');
           title.className = 'dp-startup-intro-title';
-          title.innerText = 'Mock up Systems, play with Ideas.';
+          title.innerText = this.t('startup.title');
+          this.heroTitle = title;
   
           const description = document.createElement('p');
           description.className = 'dp-startup-intro-description';
-          description.innerText = 'Start with a blank canvas, open the guided demo with Help docked beside it, or jump back into a project stored in this browser.';
+          description.innerText = this.t('startup.description');
+          this.heroDescription = description;
   
           hero.appendChild(eyebrow);
           hero.appendChild(title);
@@ -30309,23 +31331,25 @@
   
           const actions = document.createElement('div');
           actions.className = 'dp-startup-intro-actions';
-          actions.appendChild(this.createActionCard({
+          const defaultProjectActionCard = this.createActionCard({
               accentClassName: 'is-default',
-              badgeText: 'Fresh Start',
-              title: 'Start with Default Project',
-              description: 'Open the clean project that loads by default and begin building right away.',
-              buttonLabel: 'Open Blank Workspace',
+              badgeText: this.t('startup.freshStart'),
+              title: this.t('startup.startDefaultProject'),
+              description: this.t('startup.startDefaultDescription'),
+              buttonLabel: this.t('startup.openBlankWorkspace'),
               buttonKind: 'primary',
               onClick: () => {
                   this.close();
               },
-          }));
-          actions.appendChild(this.createActionCard({
+          });
+          actions.appendChild(defaultProjectActionCard.element);
+          this.defaultProjectActionCard = defaultProjectActionCard;
+          const demoProjectActionCard = this.createActionCard({
               accentClassName: 'is-demo',
-              badgeText: 'Guided Demo',
-              title: 'Open Demo Project',
-              description: 'Load the compact sample workspace and open the Help window docked on the right for a guided tour.',
-              buttonLabel: 'Open Demo with Help',
+              badgeText: this.t('startup.guidedDemo'),
+              title: this.t('startup.openDemoProject'),
+              description: this.t('startup.openDemoDescription'),
+              buttonLabel: this.t('startup.openDemo'),
               buttonKind: 'secondary',
               onClick: () => {
                   const didLoad = this.workspacePanel?.loadCompactHelpSampleWorkspaceWithDockedHelp?.();
@@ -30333,7 +31357,9 @@
                       this.close();
                   }
               },
-          }));
+          });
+          actions.appendChild(demoProjectActionCard.element);
+          this.demoProjectActionCard = demoProjectActionCard;
   
           const savedProjectsSection = document.createElement('section');
           savedProjectsSection.className = 'dp-startup-intro-saved';
@@ -30344,13 +31370,16 @@
           const savedProjectsTitleShell = document.createElement('div');
           const savedProjectsEyebrow = document.createElement('div');
           savedProjectsEyebrow.className = 'dp-startup-intro-section-eyebrow';
-          savedProjectsEyebrow.innerText = 'Saved Projects';
+          savedProjectsEyebrow.innerText = this.t('startup.savedProjectsEyebrow');
+          this.savedProjectsEyebrow = savedProjectsEyebrow;
           const savedProjectsTitle = document.createElement('h2');
           savedProjectsTitle.className = 'dp-startup-intro-section-title';
-          savedProjectsTitle.innerText = 'Resume a browser-saved project';
+          savedProjectsTitle.innerText = this.t('startup.savedProjectsTitle');
+          this.savedProjectsTitle = savedProjectsTitle;
           const savedProjectsDescription = document.createElement('p');
           savedProjectsDescription.className = 'dp-startup-intro-section-description';
-          savedProjectsDescription.innerText = 'These projects were persisted in this browser and are ready to reopen.';
+          savedProjectsDescription.innerText = this.t('startup.savedProjectsDescription');
+          this.savedProjectsDescription = savedProjectsDescription;
           savedProjectsTitleShell.appendChild(savedProjectsEyebrow);
           savedProjectsTitleShell.appendChild(savedProjectsTitle);
           savedProjectsTitleShell.appendChild(savedProjectsDescription);
@@ -30363,7 +31392,7 @@
           const savedProjectsList = document.createElement('div');
           savedProjectsList.className = 'dp-startup-intro-project-list';
   
-          const footer = document.createElement('label');
+          const footer = document.createElement('div');
           footer.className = 'dp-startup-intro-footer';
           const disableCheckbox = document.createElement('input');
           disableCheckbox.type = 'checkbox';
@@ -30373,9 +31402,33 @@
               });
           });
           const footerText = document.createElement('span');
-          footerText.innerText = 'Do not show this intro page on startup';
-          footer.appendChild(disableCheckbox);
-          footer.appendChild(footerText);
+          footerText.innerText = this.t('startup.disableIntro');
+          this.footerText = footerText;
+          const footerCheckboxLabel = document.createElement('label');
+          footerCheckboxLabel.className = 'dp-startup-intro-footer-checkbox';
+          footerCheckboxLabel.appendChild(disableCheckbox);
+          footerCheckboxLabel.appendChild(footerText);
+  
+          const languageShell = document.createElement('div');
+          languageShell.className = 'dp-startup-intro-language';
+          const languageLabel = document.createElement('span');
+          languageLabel.className = 'dp-startup-intro-language-label';
+          languageLabel.innerText = this.t('settings.language');
+          this.languageLabel = languageLabel;
+          const languageSelect = document.createElement('select');
+          languageSelect.className = 'dp-input dp-startup-intro-language-select';
+          languageSelect.setAttribute('aria-label', this.t('settings.languageSelectAria'));
+          languageSelect.addEventListener('change', () => {
+              this.appSettings?.setSettings?.({
+                  language: languageSelect.value,
+              });
+          });
+          this.languageSelect = languageSelect;
+  
+          languageShell.appendChild(languageLabel);
+          languageShell.appendChild(languageSelect);
+          footer.appendChild(footerCheckboxLabel);
+          footer.appendChild(languageShell);
   
           savedProjectsSection.appendChild(savedProjectsHeader);
           savedProjectsSection.appendChild(savedProjectsList);
@@ -30423,7 +31476,19 @@
           card.appendChild(title);
           card.appendChild(description);
           card.appendChild(button);
-          return card;
+          return {
+              element: card,
+              badge,
+              title,
+              description,
+              button,
+              setContent: (content = {}) => {
+                  badge.innerText = content.badgeText ?? '';
+                  title.innerText = content.title ?? '';
+                  description.innerText = content.description ?? '';
+                  button.innerText = content.buttonLabel ?? 'Open';
+              },
+          };
       }
   
       showIfNeeded() {
@@ -30442,6 +31507,34 @@
           return AppSettings.normalizeSettings(this.appSettings?.getSettings?.()).showIntroPageOnStartup === true;
       }
   
+      refreshLanguageUi() {
+          if (this.heroEyebrow) this.heroEyebrow.innerText = this.t('startup.welcomeEyebrow');
+          if (this.heroTitle) this.heroTitle.innerText = this.t('startup.title');
+          if (this.heroDescription) this.heroDescription.innerText = this.t('startup.description');
+          this.defaultProjectActionCard?.setContent?.({
+              badgeText: this.t('startup.freshStart'),
+              title: this.t('startup.startDefaultProject'),
+              description: this.t('startup.startDefaultDescription'),
+              buttonLabel: this.t('startup.openBlankWorkspace'),
+          });
+          this.demoProjectActionCard?.setContent?.({
+              badgeText: this.t('startup.guidedDemo'),
+              title: this.t('startup.openDemoProject'),
+              description: this.t('startup.openDemoDescription'),
+              buttonLabel: this.t('startup.openDemo'),
+          });
+          if (this.savedProjectsEyebrow) this.savedProjectsEyebrow.innerText = this.t('startup.savedProjectsEyebrow');
+          if (this.savedProjectsTitle) this.savedProjectsTitle.innerText = this.t('startup.savedProjectsTitle');
+          if (this.savedProjectsDescription) this.savedProjectsDescription.innerText = this.t('startup.savedProjectsDescription');
+          if (this.footerText) this.footerText.innerText = this.t('startup.disableIntro');
+          if (this.languageLabel) this.languageLabel.innerText = this.t('settings.language');
+          if (this.languageSelect) {
+              this.languageSelect.setAttribute('aria-label', this.t('settings.languageSelectAria'));
+              this.renderLanguageOptions();
+          }
+          this.renderSavedProjects();
+      }
+  
       open() {
           this.renderSavedProjects();
           this.syncSettingsUi(this.appSettings?.getSettings?.());
@@ -30457,11 +31550,34 @@
       }
   
       syncSettingsUi(settings = null) {
-          if (!this.disableIntroCheckbox) return;
           const normalizedSettings = AppSettings.normalizeSettings(
               settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
           );
-          this.disableIntroCheckbox.checked = normalizedSettings.showIntroPageOnStartup !== true;
+          if (this.disableIntroCheckbox) {
+              this.disableIntroCheckbox.checked = normalizedSettings.showIntroPageOnStartup !== true;
+          }
+          if (this.languageSelect) {
+              this.renderLanguageOptions();
+              this.languageSelect.value = normalizedSettings.language;
+          }
+      }
+  
+      renderLanguageOptions() {
+          if (!this.languageSelect) return;
+          const options = globalThis.DoublePhiI18n?.getLanguageOptions?.() ?? [
+              { value: 'en', label: 'English' },
+          ];
+          const currentValue = this.languageSelect.value;
+          this.languageSelect.replaceChildren();
+          options.forEach((option) => {
+              const optionElement = document.createElement('option');
+              optionElement.value = option.value;
+              optionElement.innerText = option.label;
+              this.languageSelect.appendChild(optionElement);
+          });
+          if (Array.from(this.languageSelect.options).some((option) => option.value === currentValue)) {
+              this.languageSelect.value = currentValue;
+          }
       }
   
       renderSavedProjects() {
@@ -30470,13 +31586,15 @@
           const savedProjects = this.persistence?.getBrowserCacheProjectSummaries?.() ?? [];
           this.savedProjectsList.replaceChildren();
           if (this.savedProjectsCount) {
-              this.savedProjectsCount.innerText = `${savedProjects.length} saved`;
+              this.savedProjectsCount.innerText = this.t('summary.savedCount', {
+                  count: savedProjects.length,
+              });
           }
   
           if (savedProjects.length === 0) {
               const emptyState = document.createElement('div');
               emptyState.className = 'dp-startup-intro-empty-state';
-              emptyState.innerText = 'No persisted browser projects yet. Save one from the Persistence window and it will appear here next time.';
+              emptyState.innerText = this.t('startup.emptyState');
               this.savedProjectsList.appendChild(emptyState);
               return;
           }
@@ -30493,7 +31611,7 @@
               titleRow.className = 'dp-startup-intro-project-title-row';
               const name = document.createElement('div');
               name.className = 'dp-startup-intro-project-title';
-              name.innerText = projectSummary.name ?? 'Untitled Project';
+              name.innerText = projectSummary.name ?? this.t('startup.untitledProject');
               const chip = document.createElement('div');
               chip.className = 'dp-startup-intro-project-chip';
               chip.innerText = this.formatWorkspaceCount(projectSummary.workspaceCount);
@@ -30502,7 +31620,9 @@
   
               const meta = document.createElement('div');
               meta.className = 'dp-startup-intro-project-meta';
-              meta.innerText = `Saved ${this.formatSavedAt(projectSummary.savedAt)}`;
+              meta.innerText = this.t('summary.savedAt', {
+                  value: this.formatSavedAt(projectSummary.savedAt),
+              });
   
               button.appendChild(titleRow);
               button.appendChild(meta);
@@ -30517,23 +31637,28 @@
                   this.workspacePanel.loadTextarea.value = this.persistence.serialize();
               }
               this.workspacePanel?.syncProjectUi?.();
-              this.workspacePanel?.setStatus?.(`Loaded saved project ${projectSummary.name}.`);
+              this.workspacePanel?.setStatus?.(this.t('status.loadedSavedProject', {
+                  name: projectSummary.name,
+              }));
               this.close();
           } catch (error) {
               console.error('Failed to load saved browser project.', error);
-              this.workspacePanel?.setStatus?.(error.message || 'Saved project load failed.');
+              this.workspacePanel?.setStatus?.(error.message || this.t('startup.savedProjectLoadFailed'));
           }
       }
   
       formatWorkspaceCount(workspaceCount = 0) {
           const count = Number.isFinite(workspaceCount) ? workspaceCount : 0;
-          return `${count} workspace${count === 1 ? '' : 's'}`;
+          return this.t('summary.workspaceCount', {
+              count,
+              suffix: count === 1 ? '' : 's',
+          });
       }
   
       formatSavedAt(savedAt = null) {
-          if (!savedAt) return 'recently';
+          if (!savedAt) return this.t('summary.recently');
           try {
-              return new Intl.DateTimeFormat(undefined, {
+              return new Intl.DateTimeFormat(globalThis.DoublePhiI18n?.getLocale?.(), {
                   dateStyle: 'medium',
                   timeStyle: 'short',
               }).format(new Date(savedAt));
@@ -30561,6 +31686,8 @@
       const loggerPanel = new LoggerPanel(loggerPanelX, loggerPanelY, panelHelper);
       const logger = new ConsoleLogger();
       const appSettings = new AppSettings(logger);
+      globalThis.DoublePhiI18n?.setLanguage?.(appSettings.getSettings?.()?.language);
+      document.title = globalThis.DoublePhiI18n?.t?.('app.title') ?? 'Jigbox';
       const componentCodeLogger = new MultiLogger([
           new ConsoleLogger(),
           new WindowLogger(loggerPanel),
@@ -30687,6 +31814,12 @@
       --panel-control-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
       --panel-hover-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
       --topbar-bg: rgba(247, 246, 241, 0.86);
+      --toolbar-create-strip-bg: rgba(255, 255, 255, 0.56);
+      --toolbar-create-strip-border: var(--panel-control-border);
+      --toolbar-create-strip-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+      --toolbar-create-hover-bg: rgba(255, 255, 255, 0.78);
+      --toolbar-create-hover-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+      --toolbar-create-dragging-bg: rgba(255, 255, 255, 0.84);
       --workspace-panel-bg: linear-gradient(180deg, rgba(244, 250, 247, 0.95), rgba(247, 246, 241, 0.9));
       --inspector-panel-bg: linear-gradient(180deg, rgba(252, 248, 240, 0.95), rgba(247, 246, 241, 0.92));
       --code-panel-bg: linear-gradient(180deg, rgba(239, 246, 255, 0.95), rgba(243, 244, 246, 0.94));
@@ -30802,6 +31935,16 @@
       --panel-control-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
       --panel-hover-shadow: 0 10px 18px rgba(2, 6, 23, 0.25);
       --topbar-bg: rgba(9, 14, 26, 0.88);
+      --toolbar-create-strip-bg: rgba(30, 41, 59, 0.76);
+      --toolbar-create-strip-border: rgba(148, 163, 184, 0.22);
+      --toolbar-create-strip-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 12px 24px rgba(2, 6, 23, 0.22);
+      --toolbar-create-hover-bg: rgba(51, 65, 85, 0.88);
+      --toolbar-create-hover-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 12px 24px rgba(2, 6, 23, 0.3);
+      --toolbar-create-dragging-bg: rgba(71, 85, 105, 0.94);
       --workspace-panel-bg: linear-gradient(180deg, rgba(9, 14, 26, 0.97), rgba(11, 18, 32, 0.94));
       --inspector-panel-bg: linear-gradient(180deg, rgba(17, 24, 39, 0.97), rgba(11, 18, 32, 0.94));
       --code-panel-bg: linear-gradient(180deg, rgba(6, 10, 18, 0.98), rgba(9, 14, 26, 0.94));
@@ -31430,10 +32573,10 @@
       align-items: stretch;
       gap: 4px;
       padding: 4px;
-      border: 1px solid var(--panel-control-border);
+      border: 1px solid var(--toolbar-create-strip-border);
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.56);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+      background: var(--toolbar-create-strip-bg);
+      box-shadow: var(--toolbar-create-strip-shadow);
     }
 
     .dp-topbar-select {
@@ -31765,8 +32908,8 @@
     }
 
     .dp-toolbar-btn-create:hover {
-      background: rgba(255, 255, 255, 0.78);
-      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+      background: var(--toolbar-create-hover-bg);
+      box-shadow: var(--toolbar-create-hover-shadow);
       transform: translateY(-1px);
     }
 
@@ -31777,8 +32920,8 @@
 
     .dp-toolbar-btn-create.is-dragging {
       opacity: 0.78;
-      background: rgba(255, 255, 255, 0.84);
-      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+      background: var(--toolbar-create-dragging-bg);
+      box-shadow: var(--toolbar-create-hover-shadow);
     }
 
     .dp-toolbar-btn-icon {
@@ -31818,6 +32961,11 @@
       border-color: var(--panel-active-border);
       color: var(--panel-active-text);
       box-shadow: var(--panel-hover-shadow);
+    }
+
+    .dp-toolbar-btn.is-active .dp-toolbar-btn-icon,
+    .dp-toolbar-btn.is-active .dp-toolbar-btn-text {
+      color: inherit;
     }
 
     .dp-btn-secondary {
@@ -32121,6 +33269,11 @@
 
     .dp-settings-row-stacked .dp-settings-choice-group {
       justify-content: flex-start;
+    }
+
+    .dp-settings-select {
+      min-width: 164px;
+      width: auto;
     }
 
     .dp-settings-color-control {
@@ -34306,7 +35459,7 @@
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       grid-column: 2;
-      grid-row: 1 / 4;
+      grid-row: 1 / 3;
       align-self: stretch;
       min-height: 0;
       padding: 18px;
@@ -34389,20 +35542,58 @@
     }
 
     .dp-startup-intro-footer {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 10px;
-      grid-column: 1;
+      justify-content: space-between;
+      gap: 16px;
+      grid-column: 1 / -1;
       grid-row: 3;
       align-self: end;
       margin-top: 4px;
       font-size: 14px;
+      flex-wrap: wrap;
     }
 
-    .dp-startup-intro-footer input {
+    .dp-startup-intro-footer-checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      min-height: 42px;
+    }
+
+    .dp-startup-intro-footer input[type="checkbox"] {
       width: 18px;
       height: 18px;
       accent-color: #0f766e;
+    }
+
+    .dp-startup-intro-language {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-left: auto;
+      min-height: 42px;
+    }
+
+    .dp-startup-intro-language-label {
+      display: inline-flex;
+      align-items: center;
+      flex: none;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #0f766e;
+      min-height: 42px;
+    }
+
+    .dp-startup-intro-language-select {
+      width: auto;
+      min-width: 150px;
+      margin: 0;
     }
 
     @media (max-width: 900px) {
@@ -34434,6 +35625,16 @@
       .dp-startup-intro-project-title-row {
         flex-direction: column;
         align-items: flex-start;
+      }
+
+      .dp-startup-intro-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .dp-startup-intro-language {
+        margin-left: 0;
+        justify-content: space-between;
       }
 
       .dp-startup-intro-project-list {
