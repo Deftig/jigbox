@@ -448,6 +448,7 @@
         componentId: component.id,
         entryId: property.id,
         ...property.getDisplayConfig?.(),
+        representation: ControlPanelModel.propertyRepresentationDefault,
         label: '',
         ...overrides,
       };
@@ -496,10 +497,7 @@
   
     updatePropertyDisplayConfig(property, displayConfig) {
       if (!(property instanceof Property)) return false;
-      const didUpdate = property.setDisplayConfig(displayConfig);
-      if (!didUpdate) return false;
-      this.syncControlPanelPropertyEntryConfig(property);
-      return true;
+      return property.setDisplayConfig(displayConfig);
     }
   
     resolveControlPanelEntryPath(path) {
@@ -1195,6 +1193,7 @@
     static entryTypeProperty = 'property';
     static entryTypeTimer = 'timer';
     static entryTypeTrigger = 'trigger';
+    static propertyRepresentationDefault = 'default';
     static propertyRepresentationText = Property.representationText;
     static propertyRepresentationDropdown = Property.representationDropdown;
     static propertyRepresentationBooleanToggle = Property.representationBooleanToggle;
@@ -1352,7 +1351,7 @@
           componentId,
           entryId,
           label: typeof entry.label === 'string' ? entry.label : '',
-          representation: displayConfig.representation,
+          representation: this.normalizePropertyRepresentation(entry.representation),
           optionsText: displayConfig.optionsText,
           minValue: displayConfig.minValue,
           maxValue: displayConfig.maxValue,
@@ -1368,8 +1367,9 @@
       };
     }
   
-    normalizePropertyRepresentation(representation) {
+    static normalizePropertyRepresentation(representation) {
       if ([
+        ControlPanelModel.propertyRepresentationDefault,
         ControlPanelModel.propertyRepresentationText,
         ControlPanelModel.propertyRepresentationDropdown,
         ControlPanelModel.propertyRepresentationBooleanToggle,
@@ -1379,7 +1379,11 @@
       ].includes(representation)) {
         return representation;
       }
-      return ControlPanelModel.propertyRepresentationText;
+      return ControlPanelModel.propertyRepresentationDefault;
+    }
+  
+    normalizePropertyRepresentation(representation) {
+      return ControlPanelModel.normalizePropertyRepresentation(representation);
     }
   
     getEntryKey(entry) {
@@ -1633,6 +1637,17 @@
           'settings.controlPanelsWindowDescription': 'Show the Control Panels window button in the toolbar menu.',
           'settings.workspaceSelector': 'Workspace Selector',
           'settings.workspaceSelectorDescription': 'Show the workspace selector and add workspace button in the toolbar.',
+          'settings.factoryReset': 'Factory Reset',
+          'settings.factoryResetDescription': 'Delete all Jigbox data persisted in this browser and reload the page.',
+          'settings.factoryResetButton': 'Factory Reset',
+          'settings.factoryResetConfirmTitle': 'Factory reset Jigbox?',
+          'settings.factoryResetConfirmIntro': 'This will permanently delete:',
+          'settings.factoryResetLoseUnsaved': 'Current unsaved project and workspace changes in this tab',
+          'settings.factoryResetLoseProjects': 'Saved projects stored in this browser',
+          'settings.factoryResetLoseLibraries': 'Saved libraries stored in this browser',
+          'settings.factoryResetLoseSettings': 'Application settings like language, theme, startup, highlighting, grid snapping, and toolbar visibility',
+          'settings.factoryResetConfirmReload': 'The page will reload immediately after reset.',
+          'settings.factoryResetConfirmQuestion': 'Do you want to continue?',
           'settings.themeDefault': 'Default',
           'settings.themeDark': 'Dark',
           'settings.interfaceLarge': 'Large',
@@ -1801,6 +1816,17 @@
           'settings.controlPanelsWindowDescription': 'Zeigt die Schaltflache fur das Control-Panels-Fenster in der Symbolleiste an.',
           'settings.workspaceSelector': 'Workspace-Auswahl',
           'settings.workspaceSelectorDescription': 'Zeigt die Workspace-Auswahl und die Schaltflache zum Hinzufugen an.',
+          'settings.factoryReset': 'Werkseinstellungen',
+          'settings.factoryResetDescription': 'Loscht alle in diesem Browser gespeicherten Jigbox-Daten und laadt die Seite neu.',
+          'settings.factoryResetButton': 'Werkseinstellungen',
+          'settings.factoryResetConfirmTitle': 'Jigbox auf Werkseinstellungen zurucksetzen?',
+          'settings.factoryResetConfirmIntro': 'Dabei werden dauerhaft geloscht:',
+          'settings.factoryResetLoseUnsaved': 'Aktuelle ungespeicherte Projekt- und Workspace-Anderungen in diesem Tab',
+          'settings.factoryResetLoseProjects': 'In diesem Browser gespeicherte Projekte',
+          'settings.factoryResetLoseLibraries': 'In diesem Browser gespeicherte Bibliotheken',
+          'settings.factoryResetLoseSettings': 'Anwendungseinstellungen wie Sprache, Design, Startseite, Hervorhebung, Rastereinrastung und Sichtbarkeit von Fenstern in der Symbolleiste',
+          'settings.factoryResetConfirmReload': 'Die Seite wird direkt nach dem Zurucksetzen neu geladen.',
+          'settings.factoryResetConfirmQuestion': 'Mochtest du fortfahren?',
           'settings.themeDefault': 'Standard',
           'settings.themeDark': 'Dunkel',
           'settings.interfaceLarge': 'Gross',
@@ -5265,6 +5291,11 @@
       );
     }
   
+    getHeaderTextWidth(newInternalWidth) {
+      const reservedButtonSpace = KonvaContainerButton.buttonWidth + 8;
+      return Math.max(0, newInternalWidth - reservedButtonSpace);
+    }
+  
   
   
     get model() {
@@ -5398,7 +5429,7 @@
       this.headerText = new Konva.Text({
         x: this.connectableOffsetX,
         y: 5,
-        width: this.initialInternalWidth,
+        width: this.getHeaderTextWidth(this.initialInternalWidth),
         text: this.container.name,
         ...containerStyles.headerText(),
       });
@@ -5419,7 +5450,7 @@
           this.rect.width(newWidth);
           this.rectHeader.width(newWidth);
           const newInternalWidth = this.internalWidth(newWidth);
-          this.headerText.width(newInternalWidth);
+          this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
           this.konvaConnectables.forEach((konvaConnectable) => {
             konvaConnectable.setWidth(newInternalWidth, newWidth);
           });
@@ -5471,7 +5502,7 @@
       this.rect.width(nextWidth);
       this.rectHeader.width(nextWidth);
       const newInternalWidth = this.internalWidth(nextWidth);
-      this.headerText.width(newInternalWidth);
+      this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
       this.konvaConnectables.forEach((konvaConnectable) => {
         konvaConnectable.setWidth(newInternalWidth, nextWidth);
       });
@@ -5552,7 +5583,7 @@
       this.rect.width(minWidthForConnectables);
       this.rectHeader.width(minWidthForConnectables);
       const newInternalWidth = this.internalWidth(minWidthForConnectables);
-      this.headerText.width(newInternalWidth);
+      this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
       this.konvaConnectables.forEach((konvaConnectable) => {
         konvaConnectable.setWidth(newInternalWidth, minWidthForConnectables);
       });
@@ -5626,7 +5657,7 @@
       this.headerText = new Konva.Text({
         x: this.connectableOffsetX,
         y: 5,
-        width: this.initialInternalWidth,
+        width: this.getHeaderTextWidth(this.initialInternalWidth),
         text: this.container.name,
         ...containerStyles.headerText()
       });
@@ -5643,7 +5674,7 @@
         this.rect.width(newWidth);
         this.rectHeader.width(newWidth);
         const newInternalWidth = this.internalWidth(newWidth);
-        this.headerText.width(newInternalWidth);
+        this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
         this.expandButton.setLocation(this.buttonX(newInternalWidth), this.buttonY());
         this.konvaWorkspace.ensureAncestorsFit(this);
       };
@@ -5716,7 +5747,7 @@
       this.rect.height(nextHeight);
   
       const newInternalWidth = this.internalWidth(nextWidth);
-      this.headerText.width(newInternalWidth);
+      this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
       this.expandButton.setLocation(this.buttonX(newInternalWidth), this.buttonY());
       this.dragTag.updateposition();
     }
@@ -5739,7 +5770,7 @@
       this.rect.height(nextHeight);
   
       const newInternalWidth = this.internalWidth(nextWidth);
-      this.headerText.width(newInternalWidth);
+      this.headerText.width(this.getHeaderTextWidth(newInternalWidth));
       this.expandButton.setLocation(this.buttonX(newInternalWidth), this.buttonY());
       this.dragTag.updateposition();
     }
@@ -7650,12 +7681,11 @@
       }
   
       const parentBounds = this.getExpandedParentLayoutBounds(item);
+      const nextBounds = this.getItemBoundsAtPosition(item, nextPosition);
       if (
         parentBounds &&
-        (
-          nextPosition.x < parentBounds.x ||
-          nextPosition.y < parentBounds.y
-        )
+        nextBounds &&
+        Konva.Util.haveIntersection(parentBounds, nextBounds) !== true
       ) {
         item.model?.getParent?.()?.removeChild?.(item.model);
       }
@@ -8482,18 +8512,37 @@
     }
   
     getClampedPositionWithinParentBounds(konvaComponent, position = null) {
-      const bounds = this.getExpandedParentLayoutBounds(konvaComponent);
-      if (!bounds) return position;
-  
       const currentPosition = position ?? konvaComponent.getCanvasPosition?.();
       if (!currentPosition) return position;
   
-      const minX = bounds.x;
-      const minY = bounds.y;
-  
       return {
-        x: Math.max(currentPosition.x, minX),
-        y: Math.max(currentPosition.y, minY),
+        x: currentPosition.x,
+        y: currentPosition.y,
+      };
+    }
+  
+    getItemBoundsAtPosition(konvaComponent, position = null) {
+      const nextPosition = position ?? konvaComponent?.getCanvasPosition?.();
+      if (!nextPosition) return null;
+  
+      const currentPosition = konvaComponent?.getCanvasPosition?.();
+      const currentBounds = konvaComponent?.getBodyBounds?.();
+      if (currentPosition && currentBounds) {
+        return {
+          ...currentBounds,
+          x: currentBounds.x + (nextPosition.x - currentPosition.x),
+          y: currentBounds.y + (nextPosition.y - currentPosition.y),
+        };
+      }
+  
+      const size = konvaComponent?.getCanvasSize?.();
+      const width = Number(size?.width);
+      const height = Number(size?.height);
+      return {
+        x: nextPosition.x,
+        y: nextPosition.y,
+        width: Number.isFinite(width) ? width : 0,
+        height: Number.isFinite(height) ? height : 0,
       };
     }
   
@@ -8704,6 +8753,36 @@
         x: (localX - this.stage.x()) / this.stage.scaleX(),
         y: (localY - this.stage.y()) / this.stage.scaleY(),
       };
+    }
+  
+    getDeepestExpandedContainerAtPosition(position) {
+      const x = Number(position?.x);
+      const y = Number(position?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  
+      const currentOrder = new Map(
+        this.groupLayer?.getChildren?.().map?.((child, index) => [child, index]) ?? [],
+      );
+  
+      return Array.from(this.konvaComponents.values())
+        .filter((item) => item instanceof KonvaContainerController && item.getIsExpanded())
+        .filter((item) => {
+          const bounds = item.getChildLayoutBounds?.() ?? item.getKonvaElement().getClientRect();
+          return (
+            x > bounds.x
+            && y > bounds.y
+            && y < bounds.y + bounds.height
+            && x < bounds.x + bounds.width
+          );
+        })
+        .sort((left, right) => {
+          const depthDiff = this.getContainerDepth(right.model) - this.getContainerDepth(left.model);
+          if (depthDiff !== 0) return depthDiff;
+          return (
+            (currentOrder.get(right.getKonvaElement()) ?? Number.MIN_SAFE_INTEGER)
+            - (currentOrder.get(left.getKonvaElement()) ?? Number.MIN_SAFE_INTEGER)
+          );
+        })[0] ?? null;
     }
   
     addPacket(konvaPacket) {
@@ -9238,6 +9317,25 @@
   
       if (clampedPosition.x === position.x && clampedPosition.y === position.y) return;
       konvaComponent.setCanvasPosition(clampedPosition.x, clampedPosition.y);
+    }
+  
+    reparentModelIntoContainer(model, targetContainerModel) {
+      const item = this.getKonvaComponent(model);
+      const nextParent = this.getKonvaComponent(targetContainerModel);
+      if (!item || !(nextParent instanceof KonvaContainerController)) return false;
+      if (item.model === nextParent.model) return false;
+  
+      item.model.getParent()?.removeChild(item.model);
+      if (item instanceof KonvaContainerController) {
+        nextParent.addContainer(item);
+      } else {
+        nextParent.addChildItem(item);
+      }
+      nextParent.ensureFitsChildren?.();
+      this.enforceChildLayoutBounds(nextParent, true);
+      this.ensureAncestorsFit(nextParent);
+      this.syncContainerLayerOrder();
+      return true;
     }
   
     nominateParentCandidate() {
@@ -10471,6 +10569,17 @@
             };
           });
         });
+      snapshot.controlPanels = (snapshot.controlPanels ?? []).map((controlPanel) => ({
+        ...controlPanel,
+        entries: (controlPanel.entries ?? []).map((entry) => (
+          entry?.type === ControlPanelModel.entryTypeProperty
+            ? {
+              ...entry,
+              representation: ControlPanelModel.propertyRepresentationDefault,
+            }
+            : entry
+        )),
+      }));
       snapshot.windowLayout = this.normalizeWindowLayoutSnapshot(snapshot.windowLayout);
       snapshot.version = 11;
       return snapshot;
@@ -10660,7 +10769,7 @@
           componentId,
           entryId,
           label: typeof entry.label === 'string' ? entry.label : '',
-          representation: displayConfig.representation,
+          representation: ControlPanelModel.normalizePropertyRepresentation(entry.representation),
           optionsText: displayConfig.optionsText,
           minValue: displayConfig.minValue,
           maxValue: displayConfig.maxValue,
@@ -12784,6 +12893,19 @@
   
     isBrowserCacheAvailable() {
       return this.getBrowserCacheStorage() != null;
+    }
+  
+    clearBrowserCache() {
+      const storage = this.getBrowserCacheStorage();
+      if (!storage) return false;
+  
+      try {
+        storage.removeItem(ProjectPersistence.browserCacheStorageKey);
+        storage.removeItem(ProjectPersistence.libraryBrowserCacheStorageKey);
+        return true;
+      } catch (error) {
+        return false;
+      }
     }
   
     getBrowserCacheProjectSummaries() {
@@ -17598,7 +17720,7 @@
     headerText() {
       return {
         wrap: 'none',
-        //ellipsis: true,
+        ellipsis: true,
         fontSize: 12,
         fontStyle: 'bold',
         //fontFamily: 'Helvetica',
@@ -17747,7 +17869,7 @@
       workspace: '🗉',
       settings: '⚙',
       library: '🕮',
-      navigator: '⎈',
+      navigator: '🖧',
       inspect: '⌕',
       code: '{ }',
       log: '🗒',
@@ -21430,6 +21552,7 @@
           this.setSectionCardTitle(this.canvasSettingsCard, this.t('settings.canvas'));
           this.setSectionCardTitle(this.highlightingSettingsCard, this.t('settings.highlighting'));
           this.setSectionCardTitle(this.featureGatesSettingsCard, this.t('settings.featureGates'));
+          this.setSectionCardTitle(this.factoryResetSettingsCard, this.t('settings.factoryReset'));
           this.setSectionCardTitle(this.browserLibraryCard, this.t('library.savedLibraries'));
           this.setSectionCardTitle(this.persistenceProjectDataCard, this.t('persistence.projectData'));
           this.setSectionCardTitle(this.persistenceSavedProjectsCard, this.t('library.savedLibraries'));
@@ -21522,6 +21645,11 @@
           this.workspaceSelectorVisibilityToggle?.setLabels?.(
               this.t('settings.workspaceSelector'),
               this.t('settings.workspaceSelectorDescription'),
+          );
+          this.factoryResetAction?.setLabels?.(
+              this.t('settings.factoryReset'),
+              this.t('settings.factoryResetDescription'),
+              this.t('settings.factoryResetButton'),
           );
   
           if (this.projectLibraryTabButton) {
@@ -21705,12 +21833,14 @@
           this.canvasSettingsCard = this.buildCanvasInteractionCard();
           this.highlightingSettingsCard = this.buildHighlightingCard();
           this.featureGatesSettingsCard = this.buildFeatureGatesCard();
+          this.factoryResetSettingsCard = this.buildFactoryResetCard();
   
           shell.appendChild(displayCard.element);
           shell.appendChild(this.startupSettingsCard.element);
           shell.appendChild(this.canvasSettingsCard.element);
           shell.appendChild(this.highlightingSettingsCard.element);
           shell.appendChild(this.featureGatesSettingsCard.element);
+          shell.appendChild(this.factoryResetSettingsCard.element);
           settingsPanelItem.appendChild(shell);
       }
   
@@ -23045,6 +23175,25 @@
           return featureGatesCard;
       }
   
+      buildFactoryResetCard() {
+          const factoryResetCard = this.panelHelper.createSectionCard(this.t('settings.factoryReset'));
+  
+          this.factoryResetAction = this.createSettingsActionRow(
+              this.t('settings.factoryReset'),
+              this.t('settings.factoryResetDescription'),
+              this.t('settings.factoryResetButton'),
+              () => {
+                  this.handleFactoryReset();
+              },
+              {
+                  buttonVariant: 'secondary',
+              },
+          );
+  
+          factoryResetCard.body.appendChild(this.factoryResetAction.row);
+          return factoryResetCard;
+      }
+  
       createSettingToggleRow(title, description, onToggle) {
           const row = this.panelHelper.createElement('div', 'dp-settings-row');
           const copy = this.panelHelper.createElement('div', 'dp-settings-copy');
@@ -23070,6 +23219,38 @@
                   heading.innerText = nextTitle;
                   body.innerText = nextDescription;
                   toggle.element.setAttribute('aria-label', nextTitle);
+              },
+          };
+      }
+  
+      createSettingsActionRow(title, description, buttonText, onAction, options = {}) {
+          const { buttonVariant = 'secondary' } = options;
+          const row = this.panelHelper.createElement('div', 'dp-settings-row');
+          const copy = this.panelHelper.createElement('div', 'dp-settings-copy');
+          const heading = this.panelHelper.createElement('div', 'dp-settings-title');
+          const body = this.panelHelper.createElement('div', 'dp-settings-description');
+          const button = this.panelHelper.makeButton(buttonVariant, buttonText, () => {
+              onAction?.();
+          });
+  
+          heading.innerText = title;
+          body.innerText = description;
+          button.type = 'button';
+  
+          copy.appendChild(heading);
+          copy.appendChild(body);
+          row.appendChild(copy);
+          row.appendChild(button);
+  
+          return {
+              row,
+              heading,
+              body,
+              button,
+              setLabels: (nextTitle, nextDescription, nextButtonText = buttonText) => {
+                  heading.innerText = nextTitle;
+                  body.innerText = nextDescription;
+                  button.innerText = nextButtonText;
               },
           };
       }
@@ -23415,6 +23596,41 @@
               ...this.projectController.getProjectSettings(),
               [settingKey]: value,
           });
+      }
+  
+      buildFactoryResetConfirmationMessage() {
+          return [
+              this.t('settings.factoryResetConfirmTitle'),
+              '',
+              this.t('settings.factoryResetConfirmIntro'),
+              `- ${this.t('settings.factoryResetLoseUnsaved')}`,
+              `- ${this.t('settings.factoryResetLoseProjects')}`,
+              `- ${this.t('settings.factoryResetLoseLibraries')}`,
+              `- ${this.t('settings.factoryResetLoseSettings')}`,
+              '',
+              this.t('settings.factoryResetConfirmReload'),
+              this.t('settings.factoryResetConfirmQuestion'),
+          ].join('\n');
+      }
+  
+      confirmFactoryReset() {
+          return globalThis.confirm?.(this.buildFactoryResetConfirmationMessage()) === true;
+      }
+  
+      clearBrowserPersistedData() {
+          this.persistence?.clearBrowserCache?.();
+          this.appSettings?.clearBrowserPersistence?.();
+      }
+  
+      reloadPage() {
+          globalThis.window?.location?.reload?.();
+      }
+  
+      handleFactoryReset() {
+          if (!this.confirmFactoryReset()) return false;
+          this.clearBrowserPersistedData();
+          this.reloadPage();
+          return true;
       }
   
       applyProjectColorSchemePreset(presetId) {
@@ -23765,12 +23981,20 @@
           );
           if (selection?.selectionType !== 'item') return;
   
+          const targetContainer = this.konvaWorkspace?.getDeepestExpandedContainerAtPosition?.(options.positionOffset);
+  
           try {
               const importResult = this.projectController.importLibraryEntry(selection.libraryEntry.id, {
                   targetModelId: selection.item.id,
                   positionOffset: options.positionOffset,
                   selectInserted: true,
               });
+              if (targetContainer && importResult?.copiedRoot) {
+                  this.konvaWorkspace?.reparentModelIntoContainer?.(importResult.copiedRoot, targetContainer.model);
+              }
+              if (importResult?.copiedRoot) {
+                  this.workspace.selectItem?.(importResult.copiedRoot);
+              }
               this.setStatus(`Added "${importResult.importedName}" to ${importResult.workspaceName}.`);
           } catch (error) {
               console.error('Failed to add library item to workspace.', error);
@@ -23822,11 +24046,12 @@
       syncRunState() {
           const runState = this.workspace.executionEnvironment.getRunState();
           const isRunning = runState === ExecutionEnvironment.runStateRunning;
+          const canRestart = isRunning || runState === ExecutionEnvironment.runStatePaused;
   
           this.btnStopExecution.disabled = runState === ExecutionEnvironment.runStateStopped;
           this.btnPauseExecution.disabled = !isRunning;
           this.btnStartExecution.disabled = isRunning;
-          this.btnRestartExecution.disabled = false;
+          this.btnRestartExecution.disabled = !canRestart;
           this.btnAddContainer.disabled = isRunning;
           this.btnAddComponent.disabled = isRunning;
           this.btnAddTextItem.disabled = isRunning;
@@ -24534,6 +24759,7 @@
   
       handleCreateToolbarDrop(dragData, positionOffset = null) {
           if (!dragData?.type) return null;
+          const targetContainer = this.konvaWorkspace?.getDeepestExpandedContainerAtPosition?.(positionOffset);
           this.konvaWorkspace?.setNextSpawnPosition?.(positionOffset);
           let createdItem = null;
   
@@ -24562,6 +24788,13 @@
                       y: positionOffset.y - (height / 2),
                   });
               }
+          }
+  
+          if (createdItem && targetContainer) {
+              this.konvaWorkspace?.reparentModelIntoContainer?.(createdItem, targetContainer.model);
+          }
+          if (createdItem) {
+              this.workspace.selectItem?.(createdItem);
           }
   
           return createdItem;
@@ -26477,24 +26710,28 @@
                   this.selectedComponent.addProperty('New Property');
               }
           });
+          addProperty.classList.add('dp-btn-flat');
   
           const addChannel = this.panelHelper.makeButton('', 'Add Channel', () => {
               if (this.selectedComponent) {
                   this.selectedComponent.addChannel('New Channel');
               }
           });
+          addChannel.classList.add('dp-btn-flat');
   
           const addTimer = this.panelHelper.makeButton('', 'Add Timer', () => {
               if (this.selectedComponent) {
                   this.selectedComponent.addTimer('New Timer');
               }
           });
+          addTimer.classList.add('dp-btn-flat');
   
           const addTrigger = this.panelHelper.makeButton('', 'Add Trigger', () => {
               if (this.selectedComponent) {
                   this.selectedComponent.addTrigger('New Trigger');
               }
           });
+          addTrigger.classList.add('dp-btn-flat');
   
           ['property', 'channel', 'timer', 'trigger', 'deleteconnectable', 'deletetrigger', 'deletetimer'].forEach(field => {
               component.observable.addFieldListener(field, () => {
@@ -27314,10 +27551,11 @@
           input.element.spellcheck = false;
           input.element.setAttribute('aria-autocomplete', 'list');
           input.element.setAttribute('aria-label', 'Search promotable properties');
-          const addButton = this.panelHelper.makeButton('success', 'Add', () => {
+          const addButton = this.panelHelper.makeButton('light', 'Add', () => {
               const added = container.addManualPromotedPropertyPath(input.element.value);
               if (added) input.setValueFunc('');
           });
+          addButton.classList.add('dp-btn-flat');
           input.element.addEventListener('keydown', (event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
@@ -29943,10 +30181,11 @@
           this.panelEntryInput = entryInput.element;
           this.panelEntrySuggestionShell = suggestionShell;
           this.panelEntrySuggestionsElement = suggestionsElement;
-          const addButton = this.panelHelper.makeButton('success', 'Add', () => {
+          const addButton = this.panelHelper.makeButton('light', 'Add', () => {
               this.closeEntrySuggestions();
               this.addEntryFromInput();
           });
+          addButton.classList.add('dp-btn-flat');
           entryInput.element.classList.add('dp-control-entry-input');
           entryInput.element.autocomplete = 'off';
           entryInput.element.spellcheck = false;
@@ -30089,10 +30328,12 @@
   
           if (entryRef.type === ControlPanelModel.entryTypeProperty) {
               const propertyDisplayConfig = this.getPropertyDisplayConfig(entryRef);
+              const propertyRepresentationOverride = this.getPropertyRepresentationOverride(entryRef);
               const representationField = this.panelHelper.createElement('div', 'dp-control-design-field');
               const representationLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
               const representationSelect = document.createElement('select');
               const representationOptions = [
+                  [ControlPanelModel.propertyRepresentationDefault, 'Default'],
                   [ControlPanelModel.propertyRepresentationDropdown, 'Selector'],
                   [ControlPanelModel.propertyRepresentationBooleanToggle, 'On / Off'],
                   [ControlPanelModel.propertyRepresentationText, 'Free Text'],
@@ -30110,7 +30351,7 @@
                   option.innerText = label;
                   representationSelect.appendChild(option);
               });
-              representationSelect.value = propertyDisplayConfig.representation;
+              representationSelect.value = propertyRepresentationOverride;
               representationSelect.addEventListener('change', () => {
                   this.updatePropertyConfiguration(entryRef, {
                       representation: representationSelect.value,
@@ -30120,7 +30361,7 @@
               representationField.appendChild(representationSelect);
               config.appendChild(representationField);
   
-              if (propertyDisplayConfig.representation === ControlPanelModel.propertyRepresentationDropdown) {
+              if (propertyRepresentationOverride === ControlPanelModel.propertyRepresentationDropdown) {
                   const optionsField = this.panelHelper.createElement('div', 'dp-control-design-field');
                   const optionsLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
                   const optionsTextarea = document.createElement('textarea');
@@ -30138,7 +30379,7 @@
                   config.appendChild(optionsField);
               }
   
-              if (propertyDisplayConfig.representation === ControlPanelModel.propertyRepresentationSlider) {
+              if (propertyRepresentationOverride === ControlPanelModel.propertyRepresentationSlider) {
                   [
                       ['Minimum', propertyDisplayConfig.minValue, 'minValue'],
                       ['Maximum', propertyDisplayConfig.maxValue, 'maxValue'],
@@ -30691,18 +30932,17 @@
               ...currentEntryRef,
               ...updates,
           });
-          if (!updated) {
+          if (!updated && !Object.keys(updates ?? {}).length) {
               this.setStatus(errorMessage);
           }
       }
   
       updatePropertyConfiguration(entryRef, updates, errorMessage = 'Could not update property view.') {
-          const property = this.workspace.resolveControlPanelEntryRef(entryRef);
-          if (!(property instanceof Property)) {
-              this.setStatus(errorMessage);
-              return;
-          }
-          const updated = this.workspace.updatePropertyDisplayConfig(property, updates);
+          const currentEntryRef = this.getCurrentEntryRef(entryRef);
+          const updated = this.controlPanel.updateEntry({
+              ...currentEntryRef,
+              ...updates,
+          });
           if (!updated && !Object.keys(updates ?? {}).length) {
               this.setStatus(errorMessage);
           }
@@ -30966,10 +31206,22 @@
   
       getPropertyDisplayConfig(entryRef) {
           const property = this.workspace.resolveControlPanelEntryRef(entryRef);
-          if (property instanceof Property) {
-              return property.getDisplayConfig?.() ?? Property.createDefaultDisplayConfig();
+          const propertyDisplayConfig = property instanceof Property
+              ? property.getDisplayConfig?.() ?? Property.createDefaultDisplayConfig()
+              : Property.createDefaultDisplayConfig();
+          const propertyRepresentationOverride = this.getPropertyRepresentationOverride(entryRef);
+          if (propertyRepresentationOverride === ControlPanelModel.propertyRepresentationDefault) {
+              return propertyDisplayConfig;
           }
-          return Property.normalizeDisplayConfig(entryRef);
+          return Property.normalizeDisplayConfig({
+              ...propertyDisplayConfig,
+              ...entryRef,
+              representation: propertyRepresentationOverride,
+          });
+      }
+  
+      getPropertyRepresentationOverride(entryRef) {
+          return this.controlPanel.normalizePropertyRepresentation(entryRef?.representation);
       }
   
       getPropertyRepresentation(entryRef) {
@@ -30977,6 +31229,7 @@
       }
   
       getPropertyRepresentationLabel(representation) {
+          if (representation === ControlPanelModel.propertyRepresentationDefault) return 'Default';
           if (representation === ControlPanelModel.propertyRepresentationDropdown) return 'Selector';
           if (representation === ControlPanelModel.propertyRepresentationBooleanToggle) return 'On / Off';
           if (representation === ControlPanelModel.propertyRepresentationNumber) return 'Number Only';
@@ -32872,6 +33125,19 @@
       border-color: var(--panel-control-border);
       color: var(--panel-muted);
       padding-inline: 11px;
+    }
+
+    .dp-btn-flat {
+      box-shadow: none;
+    }
+
+    .dp-btn-flat:hover:not(:disabled) {
+      box-shadow: none;
+      transform: none;
+    }
+
+    .dp-btn-flat:active:not(:disabled) {
+      box-shadow: none;
     }
 
     .dp-toolbar-btn {
@@ -35488,6 +35754,8 @@
     .dp-startup-intro-project-list {
       display: grid;
       gap: 12px;
+      align-content: start;
+      align-items: start;
       min-height: 0;
       overflow: auto;
       padding-right: 4px;
@@ -35495,6 +35763,7 @@
 
     .dp-startup-intro-project-button {
       width: 100%;
+      align-self: start;
       padding: 14px 16px;
       border: 1px solid rgba(148, 163, 184, 0.16);
       border-radius: 18px;
@@ -35505,7 +35774,6 @@
     }
 
     .dp-startup-intro-project-button:hover {
-      transform: translateY(-1px);
       border-color: rgba(15, 118, 110, 0.24);
       box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
     }
