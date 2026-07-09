@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'">
 
   <!-- inlined from ./lib/Konva/konva.min.js -->
   <script>
@@ -7282,9 +7283,10 @@
       }
   
       buildRuntimeScript(component) {
+          const networkGuard = this.buildNetworkGuardScript();
           const context = this.buildContext(component);
           const componentCode = component.getCode();
-          return `${context}\n\n${componentCode}`;
+          return `${networkGuard}\n\n${context}\n\n${componentCode}`;
       }
   
       handleRuntimeError(event) {
@@ -7335,6 +7337,45 @@
           const definition = `const ctx = Context.create(properties, channels, channelTargets, { componentName: ${JSON.stringify(component.name)}, triggerNames, timerNames, timerIntervals });`;
           const commandHandler = `onmessage = (e) => { const cmd = new WorkerCommand(e.data.cat, e.data.name, e.data.value); cmd.execute(); }`;
           return `${nameAliasHelperClass}\n\n${commandClass}\n\n${contextClass}\n\n${propertiesMap}\n\n${channelsList}\n\n${channelTargetsMap}\n\n${triggerNamesList}\n\n${timerNamesList}\n\n${timerIntervalsMap}\n\n${definition}\n\n${commandHandler}`;
+      }
+  
+      buildNetworkGuardScript() {
+          const allowedOrigin = globalThis?.location?.origin ?? null;
+          return `
+  const __doublephiAllowedOrigin = ${JSON.stringify(allowedOrigin)};
+  const __doublephiOriginalFetch = typeof globalThis.fetch === 'function'
+      ? globalThis.fetch.bind(globalThis)
+      : null;
+  
+  function __doublephiResolveFetchUrl(input) {
+      if (input instanceof Request) return new URL(input.url, __doublephiAllowedOrigin ?? globalThis?.location?.origin ?? undefined);
+      if (input instanceof URL) return input;
+      return new URL(String(input), __doublephiAllowedOrigin ?? globalThis?.location?.origin ?? undefined);
+  }
+  
+  function __doublephiIsAllowedFetchUrl(url) {
+      return Boolean(__doublephiAllowedOrigin) && url?.origin === __doublephiAllowedOrigin;
+  }
+  
+  if (__doublephiOriginalFetch) {
+      globalThis.fetch = (input, init) => {
+          let resolvedUrl;
+          try {
+              resolvedUrl = __doublephiResolveFetchUrl(input);
+          } catch (error) {
+              return Promise.reject(error);
+          }
+  
+          if (!__doublephiIsAllowedFetchUrl(resolvedUrl)) {
+              return Promise.reject(new Error(
+                  \`Worker fetch blocked for "\${resolvedUrl.href}". Only same-origin requests to \${__doublephiAllowedOrigin} are allowed.\`,
+              ));
+          }
+  
+          return __doublephiOriginalFetch(input, init);
+      };
+  }
+  `.trim();
       }
   
       buildPropertiesMap(component) {
@@ -14701,11 +14742,106 @@
       'Tip: quote names with spaces when needed.',
     ]);
   
+    static translations = Object.freeze({
+      en: Object.freeze({
+        summary_help: 'Show available commands',
+        summary_comp: 'Create a new component',
+        summary_cont: 'Create a new container',
+        summary_chan: 'Add a channel to a component',
+        summary_prop: 'Add a property to a component',
+        summary_tim: 'Add a timer to a component',
+        summary_trig: 'Add a trigger to a component',
+        summary_lib: 'Save a component, text item, or container to the library',
+        summary_cp: 'Copy an item to the current workspace, another workspace, or a container',
+        summary_ren: 'Rename an item or element',
+        summary_start: 'Start execution',
+        summary_stop: 'Stop execution',
+        summary_pause: 'Pause execution',
+        summary_restart: 'Restart execution',
+        summary_undo: 'Undo the last action',
+        summary_redo: 'Redo the last undone action',
+        summary_del: 'Delete an item or element',
+        summary_conn: 'Create a connection',
+        summary_delconn: 'Delete a connection',
+        summary_mv: 'Move an item into a container or another workspace',
+        summary_workspace: 'Create a new workspace',
+        summary_exit: 'Close the command line',
+        help_available: 'Available commands:',
+        help_tip: 'Tip: quote names with spaces when needed.',
+        status_closed: 'Closed command line.',
+        unknownCommand: 'Unknown command "{command}". Type "help" for available commands.',
+        commandFailed: 'Command failed.',
+        confirmed: 'Confirmed.',
+        cancelled: 'Cancelled.',
+        answerPrompt: 'Please answer y, yes, n, or no.',
+        bulkPrompt: '{prefix}This will affect {countLabel}. Are you sure you want to do this? (y/n)',
+        unclosedQuote: 'Unclosed quote in command.',
+      }),
+      de: Object.freeze({
+        summary_help: 'Verfuegbare Befehle anzeigen',
+        summary_comp: 'Eine neue Komponente erstellen',
+        summary_cont: 'Einen neuen Container erstellen',
+        summary_chan: 'Einen Kanal zu einer Komponente hinzufuegen',
+        summary_prop: 'Eine Eigenschaft zu einer Komponente hinzufuegen',
+        summary_tim: 'Einen Timer zu einer Komponente hinzufuegen',
+        summary_trig: 'Einen Trigger zu einer Komponente hinzufuegen',
+        summary_lib: 'Eine Komponente, ein Textelement oder einen Container in der Bibliothek speichern',
+        summary_cp: 'Ein Element in den aktuellen Workspace, einen anderen Workspace oder einen Container kopieren',
+        summary_ren: 'Ein Element oder Unterelement umbenennen',
+        summary_start: 'Ausfuehrung starten',
+        summary_stop: 'Ausfuehrung stoppen',
+        summary_pause: 'Ausfuehrung pausieren',
+        summary_restart: 'Ausfuehrung neu starten',
+        summary_undo: 'Die letzte Aktion rueckgaengig machen',
+        summary_redo: 'Die zuletzt rueckgaengig gemachte Aktion wiederholen',
+        summary_del: 'Ein Element oder Unterelement loeschen',
+        summary_conn: 'Eine Verbindung erstellen',
+        summary_delconn: 'Eine Verbindung loeschen',
+        summary_mv: 'Ein Element in einen Container oder anderen Workspace verschieben',
+        summary_workspace: 'Einen neuen Workspace erstellen',
+        summary_exit: 'Die Befehlszeile schliessen',
+        help_available: 'Verfuegbare Befehle:',
+        help_tip: 'Tipp: Setze Namen mit Leerzeichen bei Bedarf in Anfuehrungszeichen.',
+        status_closed: 'Befehlszeile geschlossen.',
+        unknownCommand: 'Unbekannter Befehl "{command}". Tippe "help" fuer verfuegbare Befehle.',
+        commandFailed: 'Befehl fehlgeschlagen.',
+        confirmed: 'Bestaetigt.',
+        cancelled: 'Abgebrochen.',
+        answerPrompt: 'Bitte antworte mit y, yes, n oder no.',
+        bulkPrompt: '{prefix}Dies betrifft {countLabel}. Moechtest du wirklich fortfahren? (y/n)',
+        unclosedQuote: 'Nicht geschlossene Anfuehrungszeichen im Befehl.',
+      }),
+    });
+  
     constructor(workspace, projectController, konvaWorkspace) {
       this.workspace = workspace;
       this.projectController = projectController;
       this.konvaWorkspace = konvaWorkspace;
       this.pendingConfirmation = null;
+    }
+  
+    t(key, params = {}) {
+      const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+        globalThis.DoublePhiI18n?.getLanguage?.(),
+      ) ?? 'en';
+      const template = CommandLineController.translations[language]?.[key]
+        ?? CommandLineController.translations.en[key]
+        ?? key;
+      return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+        Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+      ));
+    }
+  
+    getCommandSummary(commandName) {
+      return this.t(`summary_${commandName}`, {});
+    }
+  
+    getHelpEntries() {
+      return [
+        this.t('help_available'),
+        ...CommandLineController.helpEntries.slice(1, -1),
+        this.t('help_tip'),
+      ];
     }
   
     execute(input) {
@@ -14733,7 +14869,7 @@
         switch (command) {
           case 'help':
             return this.buildResult({
-              entries: CommandLineController.helpEntries.map((text) => ({ text, kind: 'info' })),
+              entries: this.getHelpEntries().map((text) => ({ text, kind: 'info' })),
             });
           case 'comp':
           case 'component':
@@ -14785,13 +14921,13 @@
           case 'exit':
             return this.buildResult({
               closePanel: true,
-              status: 'Closed command line.',
+              status: this.t('status_closed'),
             });
           default:
-            return this.buildError(`Unknown command "${rawCommand}". Type "help" for available commands.`);
+            return this.buildError(this.t('unknownCommand', { command: rawCommand }));
         }
       } catch (error) {
-        return this.buildError(error?.message || 'Command failed.');
+        return this.buildError(error?.message || this.t('commandFailed'));
       }
     }
   
@@ -14801,19 +14937,19 @@
         const pendingConfirmation = this.pendingConfirmation;
         this.pendingConfirmation = null;
         try {
-          return pendingConfirmation?.onConfirm?.() ?? this.buildInfo('Confirmed.');
+          return pendingConfirmation?.onConfirm?.() ?? this.buildInfo(this.t('confirmed'));
         } catch (error) {
-          return this.buildError(error?.message || 'Command failed.');
+          return this.buildError(error?.message || this.t('commandFailed'));
         }
       }
   
       if (normalizedAnswer === 'n' || normalizedAnswer === 'no') {
-        const cancelMessage = this.pendingConfirmation?.cancelMessage || 'Cancelled.';
+        const cancelMessage = this.pendingConfirmation?.cancelMessage || this.t('cancelled');
         this.pendingConfirmation = null;
         return this.buildInfo(cancelMessage);
       }
   
-      return this.buildInfo('Please answer y, yes, n, or no.');
+      return this.buildInfo(this.t('answerPrompt'));
     }
   
     buildResult(options = {}) {
@@ -14854,16 +14990,17 @@
       const messagePrefix = typeof options.messagePrefix === 'string' && options.messagePrefix.trim()
         ? `${options.messagePrefix.trim()} `
         : '';
-      const promptMessage = `${messagePrefix}This will affect ${this.buildCountLabel(
+      const countLabel = this.buildCountLabel(
         count,
         singular,
         options.plural,
-      )}. Are you sure you want to do this? (y/n)`;
+      );
+      const localizedPrompt = this.t('bulkPrompt', { prefix: messagePrefix, countLabel });
       this.pendingConfirmation = {
         onConfirm,
-        cancelMessage: options.cancelMessage || 'Cancelled.',
+        cancelMessage: options.cancelMessage || this.t('cancelled'),
       };
-      return this.buildInfo(promptMessage);
+      return this.buildInfo(localizedPrompt);
     }
   
     shouldSubmitAfterAutocompleteSelection(input) {
@@ -14946,7 +15083,7 @@
       }
   
       if (quote) {
-        return { tokens: [], error: 'Unclosed quote in command.' };
+        return { tokens: [], error: this.t('unclosedQuote') };
       }
   
       if (escaped) {
@@ -15311,7 +15448,7 @@
         );
         return this.createAutocompleteSuggestion(
           commandEntry.name,
-          commandEntry.summary,
+          this.getCommandSummary(commandEntry.name),
           nextValue,
           'command',
         );
@@ -20062,6 +20199,21 @@
   <script>
   class CommandLinePanel {
   
+    static translations = Object.freeze({
+      en: Object.freeze({
+        panelTitle: 'Command Line',
+        panelEyebrow: 'Workspace',
+        inputPlaceholder: 'Type help to see available commands',
+        intro: 'Type "help" to list available commands.',
+      }),
+      de: Object.freeze({
+        panelTitle: 'Befehlszeile',
+        panelEyebrow: 'Workspace',
+        inputPlaceholder: 'Tippe help, um verfuegbare Befehle zu sehen',
+        intro: 'Tippe "help", um verfuegbare Befehle aufzulisten.',
+      }),
+    });
+  
     constructor(projectController, workspace, konvaWorkspace, panelHelper, onStatusChange = null) {
       this.projectController = projectController;
       this.workspace = workspace;
@@ -20084,8 +20236,8 @@
       const floatingY = Math.max(22, window.innerHeight - defaultHeight - 22);
   
       this.panel = new Panel(floatingX, floatingY, panelHelper, {
-        title: 'Command Line',
-        eyebrow: 'Workspace',
+        title: this.t('panelTitle'),
+        eyebrow: this.t('panelEyebrow'),
         variant: 'commandline',
         dockIconText: ButtonSymbols.commandLine,
         persistenceId: 'workspace:command-line',
@@ -20128,7 +20280,7 @@
       this.input.type = 'text';
       this.input.autocomplete = 'off';
       this.input.spellcheck = false;
-      this.input.placeholder = 'Type help to see available commands';
+      this.input.placeholder = this.t('inputPlaceholder');
       this.input.addEventListener('input', () => {
         this.refreshSuggestions();
       });
@@ -20164,8 +20316,31 @@
       });
   
       this.panel.dockTo('bottom');
-      this.appendEntry('Type "help" to list available commands.', 'info');
+      this.introEntry = this.appendEntry(this.t('intro'), 'info');
       this.setVisible(false, false);
+    }
+  
+    t(key, params = {}) {
+      const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+        globalThis.DoublePhiI18n?.getLanguage?.(),
+      ) ?? 'en';
+      const template = CommandLinePanel.translations[language]?.[key]
+        ?? CommandLinePanel.translations.en[key]
+        ?? key;
+      return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+        Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+      ));
+    }
+  
+    refreshLanguageUi() {
+      this.panel?.setTitle?.(this.t('panelTitle'));
+      this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+      if (this.input) {
+        this.input.placeholder = this.t('inputPlaceholder');
+      }
+      if (this.introEntry?.isConnected) {
+        this.introEntry.innerText = this.t('intro');
+      }
     }
   
     bringToFront() {
@@ -20180,6 +20355,7 @@
       line.innerText = text;
       this.output.appendChild(line);
       this.output.scrollTop = this.output.scrollHeight;
+      return line;
     }
   
     executeInput() {
@@ -20473,6 +20649,71 @@
   <script>
   class WorkspaceNavigatorPanel {
   
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelTitle: 'Navigator',
+              panelEyebrow: 'Project',
+              searchPlaceholder: '⌕ Search project, workspaces, text items, components, containers, and elements',
+              collapseAll: 'Collapse all',
+              collapseAllTooltip: 'Collapse all navigator groups',
+              treeExpandedWhileFiltering: 'Tree stays expanded while filtering.',
+              expand: 'Expand {label}',
+              collapse: 'Collapse {label}',
+              inspectEntry: 'Inspect {type} {label}',
+              inspectElement: 'Inspect {type} {label} on component {component}',
+              itemInWorkspace: '{itemLabel} in workspace.',
+              showingItemsInWorkspace: 'Showing {visible} of {itemLabel}.',
+              itemsAcrossWorkspaces: '{itemLabel} across {workspaceLabel}.',
+              showingItemsAcrossWorkspaces: 'Showing {visible} of {itemLabel} across {workspaceLabel}.',
+              stateCollapsed: 'Collapsed',
+              stateExpanded: 'Expanded',
+              metaChildren: '{count} child{suffix}',
+              metaElements: '{count} element{suffix}',
+              metaLines: '{count} line{suffix}',
+              typeProject: 'Project',
+              typeWorkspace: 'Workspace',
+              typeComponent: 'Component',
+              projectMeta: 'Project · {name} · {workspaceLabel}',
+              workspaceMeta: 'Workspace · {state} · {itemLabel}',
+              emptyFiltered: 'No project items match that filter.',
+              emptyProject: 'The project tree, workspaces, and workspace content will appear here.',
+              emptyWorkspace: 'Text items, components, containers, and component elements in the workspace will appear here.',
+              statusActive: 'Active',
+              statusInactive: 'Inactive',
+          }),
+          de: Object.freeze({
+              panelTitle: 'Navigator',
+              panelEyebrow: 'Projekt',
+              searchPlaceholder: '⌕ Projekt, Workspaces, Textelemente, Komponenten, Container und Elemente durchsuchen',
+              collapseAll: 'Alle einklappen',
+              collapseAllTooltip: 'Alle Navigatorgruppen einklappen',
+              treeExpandedWhileFiltering: 'Der Baum bleibt waehrend des Filterns aufgeklappt.',
+              expand: '{label} aufklappen',
+              collapse: '{label} einklappen',
+              inspectEntry: '{type} {label} im Inspektor anzeigen',
+              inspectElement: '{type} {label} an Komponente {component} im Inspektor anzeigen',
+              itemInWorkspace: '{itemLabel} im Workspace.',
+              showingItemsInWorkspace: '{visible} von {itemLabel} werden angezeigt.',
+              itemsAcrossWorkspaces: '{itemLabel} in {workspaceLabel}.',
+              showingItemsAcrossWorkspaces: '{visible} von {itemLabel} in {workspaceLabel} werden angezeigt.',
+              stateCollapsed: 'Eingeklappt',
+              stateExpanded: 'Ausgeklappt',
+              metaChildren: '{childLabel}',
+              metaElements: '{itemLabel}',
+              metaLines: '{lineLabel}',
+              typeProject: 'Projekt',
+              typeWorkspace: 'Workspace',
+              typeComponent: 'Komponente',
+              projectMeta: 'Projekt · {name} · {workspaceLabel}',
+              workspaceMeta: 'Workspace · {state} · {itemLabel}',
+              emptyFiltered: 'Keine Projekteintraege passen zu diesem Filter.',
+              emptyProject: 'Der Projektbaum, die Workspaces und deren Inhalte erscheinen hier.',
+              emptyWorkspace: 'Textelemente, Komponenten, Container und Komponentenelemente im Workspace erscheinen hier.',
+              statusActive: 'Aktiv',
+              statusInactive: 'Inaktiv',
+          }),
+      });
+  
       listenerKey = 'workspaceNavigatorPanel';
       filterQuery = '';
   
@@ -20489,8 +20730,8 @@
           this.initializedCollapsedTreeModels = new Set();
   
           this.panel = new Panel(x, y, panelHelper, {
-              title: 'Navigator',
-              eyebrow: 'Project',
+              title: this.t('panelTitle'),
+              eyebrow: this.t('panelEyebrow'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.navigator,
               persistenceId: 'workspace:navigator',
@@ -20537,6 +20778,75 @@
           this.componentPanel = componentPanel ?? null;
       }
   
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = WorkspaceNavigatorPanel.translations[language]?.[key]
+              ?? WorkspaceNavigatorPanel.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      pluralSuffix(count, singularSuffix = '', pluralSuffix = 's') {
+          return Number(count) === 1 ? singularSuffix : pluralSuffix;
+      }
+  
+      getLanguage() {
+          return globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+      }
+  
+      formatItemLabel(count) {
+          const normalizedCount = Number(count) || 0;
+          if (this.getLanguage() === 'de') {
+              return `${normalizedCount} Element${normalizedCount === 1 ? '' : 'e'}`;
+          }
+          return `${normalizedCount} item${normalizedCount === 1 ? '' : 's'}`;
+      }
+  
+      formatWorkspaceLabel(count) {
+          const normalizedCount = Number(count) || 0;
+          if (this.getLanguage() === 'de') {
+              return `${normalizedCount} Workspace${normalizedCount === 1 ? '' : 's'}`;
+          }
+          return `${normalizedCount} workspace${normalizedCount === 1 ? '' : 's'}`;
+      }
+  
+      formatChildLabel(count) {
+          const normalizedCount = Number(count) || 0;
+          if (this.getLanguage() === 'de') {
+              return `${normalizedCount} Kind${normalizedCount === 1 ? '' : 'er'}`;
+          }
+          return `${normalizedCount} child${normalizedCount === 1 ? '' : 'ren'}`;
+      }
+  
+      formatLineLabel(count) {
+          const normalizedCount = Number(count) || 0;
+          if (this.getLanguage() === 'de') {
+              return `${normalizedCount} Zeile${normalizedCount === 1 ? '' : 'n'}`;
+          }
+          return `${normalizedCount} line${normalizedCount === 1 ? '' : 's'}`;
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setTitle?.(this.t('panelTitle'));
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+          if (this.filterInput?.element) {
+              this.filterInput.element.placeholder = this.t('searchPlaceholder');
+          }
+          if (this.collapseAllButton) {
+              const tooltip = this.t('collapseAllTooltip');
+              this.collapseAllButton.innerText = this.t('collapseAll');
+              this.collapseAllButton.title = tooltip;
+              this.collapseAllButton.setAttribute('aria-label', tooltip);
+          }
+          this.renderTree();
+      }
+  
       buildPanel() {
           const shell = this.panelHelper.createElement('div', 'dp-workspace-tree-shell');
           const card = this.panelHelper.createSectionCard();
@@ -20546,7 +20856,7 @@
           this.filterInput = this.panelHelper.createInput('', (value) => {
               this.applyFilter(value);
           }, {
-              placeholder: '⌕ Search project, workspaces, text items, components, containers, and elements',
+              placeholder: this.t('searchPlaceholder'),
           });
           this.filterInput.element.classList.add('dp-workspace-tree-filter');
           this.filterInput.element.addEventListener('input', (event) => {
@@ -20555,13 +20865,13 @@
   
           this.metaRow = this.panelHelper.createElement('div', 'dp-workspace-tree-meta-row');
           this.metaElement = this.panelHelper.createElement('div', 'dp-workspace-tree-meta');
-          this.collapseAllButton = this.panelHelper.makeButton('secondary', 'Collapse all', () => {
+          this.collapseAllButton = this.panelHelper.makeButton('secondary', this.t('collapseAll'), () => {
               this.collapseAllTreeGroups();
           });
           this.collapseAllButton.classList.add('dp-workspace-tree-meta-action');
           this.collapseAllButton.type = 'button';
-          this.collapseAllButton.title = 'Collapse all navigator groups';
-          this.collapseAllButton.setAttribute('aria-label', 'Collapse all navigator groups');
+          this.collapseAllButton.title = this.t('collapseAllTooltip');
+          this.collapseAllButton.setAttribute('aria-label', this.t('collapseAllTooltip'));
           this.treeList = this.panelHelper.createElement('div', 'dp-workspace-tree-scroll');
           this.emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
   
@@ -21047,35 +21357,49 @@
               );
               const visibleEntriesCount = this.getVisibleEntryCount(visibleEntries, contentFilter);
               if (!tokens.length) {
-                  return `${totalEntries} item${totalEntries === 1 ? '' : 's'} in workspace.`;
+                  return this.t('itemInWorkspace', { itemLabel: this.formatItemLabel(totalEntries) });
               }
-              return `Showing ${visibleEntriesCount} of ${totalEntries} item${totalEntries === 1 ? '' : 's'}.`;
+              return this.t('showingItemsInWorkspace', {
+                  visible: visibleEntriesCount,
+                  itemLabel: this.formatItemLabel(totalEntries),
+              });
           }
   
           const totalEntries = this.getVisibleEntryCount(this.buildProjectTreeEntries([]), contentFilter);
           const visibleEntriesCount = this.getVisibleEntryCount(visibleEntries, contentFilter);
           const workspaceCount = this.getProjectWorkspaceContexts().length;
           if (!tokens.length) {
-              return `${totalEntries} item${totalEntries === 1 ? '' : 's'} across ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}.`;
+              return this.t('itemsAcrossWorkspaces', {
+                  itemLabel: this.formatItemLabel(totalEntries),
+                  workspaceLabel: this.formatWorkspaceLabel(workspaceCount),
+              });
           }
-          return `Showing ${visibleEntriesCount} of ${totalEntries} item${totalEntries === 1 ? '' : 's'} across ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}.`;
+          return this.t('showingItemsAcrossWorkspaces', {
+              visible: visibleEntriesCount,
+              itemLabel: this.formatItemLabel(totalEntries),
+              workspaceLabel: this.formatWorkspaceLabel(workspaceCount),
+          });
       }
   
       getContainerMetaText(container, workspaceInstance = this.workspace) {
           const children = this.getModelChildren(container, workspaceInstance).length;
-          const stateLabel = container.expanded === false ? 'Collapsed' : 'Expanded';
-          const childLabel = `${children} child${children === 1 ? '' : 'ren'}`;
+          const stateLabel = container.expanded === false ? this.t('stateCollapsed') : this.t('stateExpanded');
+          const childLabel = this.t('metaChildren', { childLabel: this.formatChildLabel(children) });
           return `${this.getModelTypeLabel(container)} · ${stateLabel} · ${childLabel}`;
       }
   
       getComponentMetaText(component) {
           const elementCount = this.getComponentElements(component).length;
-          return `${this.getModelTypeLabel(component)} · ${elementCount} element${elementCount === 1 ? '' : 's'}`;
+          return `${this.getModelTypeLabel(component)} · ${this.t('metaElements', {
+              itemLabel: this.formatItemLabel(elementCount),
+          })}`;
       }
   
       getTextItemMetaText(textItem) {
           const lineCount = Math.max(1, String(textItem?.getText?.() ?? '').split(/\r?\n/).length);
-          return `${this.getModelTypeLabel(textItem)} · ${lineCount} line${lineCount === 1 ? '' : 's'}`;
+          return `${this.getModelTypeLabel(textItem)} · ${this.t('metaLines', {
+              lineLabel: this.formatLineLabel(lineCount),
+          })}`;
       }
   
       getEntryLabel(entry) {
@@ -21089,8 +21413,8 @@
       }
   
       getEntryTypeLabel(entry) {
-          if (entry?.kind === 'project') return 'Project';
-          if (entry?.kind === 'workspace') return 'Workspace';
+          if (entry?.kind === 'project') return this.t('typeProject');
+          if (entry?.kind === 'workspace') return this.t('typeWorkspace');
           return entry?.kind === 'element'
               ? this.getComponentElementTypeLabel(entry.element)
               : this.getModelTypeLabel(entry.model);
@@ -21115,14 +21439,20 @@
       getEntryMetaText(entry) {
           if (entry?.kind === 'project') {
               const workspaceCount = this.getProjectWorkspaceContexts().length;
-              return `Project · ${entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.getDefaultName()} · ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'}`;
+              return this.t('projectMeta', {
+                  name: entry.projectName ?? this.projectController?.getProjectName?.() ?? Project.getDefaultName(),
+                  workspaceLabel: this.formatWorkspaceLabel(workspaceCount),
+              });
           }
           if (entry?.kind === 'workspace') {
               const itemCount = this.getWorkspaceModels(entry.workspace).length;
-              return `Workspace · ${entry.workspaceIsActive === true ? 'Active' : 'Inactive'} · ${itemCount} item${itemCount === 1 ? '' : 's'}`;
+              return this.t('workspaceMeta', {
+                  state: entry.workspaceIsActive === true ? this.t('statusActive') : this.t('statusInactive'),
+                  itemLabel: this.formatItemLabel(itemCount),
+              });
           }
           if (entry?.kind === 'element') {
-              return `${this.getComponentElementTypeLabel(entry.element)} · ${entry.model?.name ?? 'Component'}`;
+              return `${this.getComponentElementTypeLabel(entry.element)} · ${entry.model?.name ?? this.t('typeComponent')}`;
           }
           if (entry?.model instanceof TextItem) {
               return this.getTextItemMetaText(entry.model);
@@ -21171,8 +21501,15 @@
           button.classList.toggle('is-selected', isSelected);
           button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
           button.setAttribute('aria-label', entry.kind === 'element'
-              ? `Inspect ${entryTypeLabel.toLowerCase()} ${entryLabel} on component ${entry.model?.name ?? ''}`.trim()
-              : `Inspect ${entryTypeLabel.toLowerCase()} ${entryLabel}`.trim());
+              ? this.t('inspectElement', {
+                  type: entryTypeLabel.toLowerCase(),
+                  label: entryLabel,
+                  component: entry.model?.name ?? '',
+              }).trim()
+              : this.t('inspectEntry', {
+                  type: entryTypeLabel.toLowerCase(),
+                  label: entryLabel,
+              }).trim());
           button.title = itemMetaText;
           button.addEventListener('click', () => {
               this.handleEntryClick(entry);
@@ -21191,9 +21528,9 @@
               toggle.classList.toggle('is-expanded', isExpanded);
               toggle.disabled = tokens.length > 0;
               toggle.title = tokens.length
-                  ? 'Tree stays expanded while filtering.'
-                  : `${isExpanded ? 'Collapse' : 'Expand'} ${entryLabel}`;
-              toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} ${entryLabel}`);
+                  ? this.t('treeExpandedWhileFiltering')
+                  : this.t(isExpanded ? 'collapse' : 'expand', { label: entryLabel });
+              toggle.setAttribute('aria-label', this.t(isExpanded ? 'collapse' : 'expand', { label: entryLabel }));
               toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
               toggle.addEventListener('click', (event) => {
                   event.preventDefault();
@@ -21352,10 +21689,10 @@
   
           if (!treeEntries.length) {
               this.emptyState.innerText = tokens.length
-                  ? 'No project items match that filter.'
+                  ? this.t('emptyFiltered')
                   : this.projectController
-                      ? 'The project tree, workspaces, and workspace content will appear here.'
-                      : 'Text items, components, containers, and component elements in the workspace will appear here.';
+                      ? this.t('emptyProject')
+                      : this.t('emptyWorkspace');
               this.treeList.appendChild(this.emptyState);
               return;
           }
@@ -21563,6 +21900,35 @@
   <script>
   class WorkspacePanel {
   
+      static localTranslations = Object.freeze({
+          en: Object.freeze({
+              librarySaveTooltip: 'Save library {label} to this browser',
+              libraryDeleteTooltip: 'Delete library {label}',
+              libraryDeleteItemTooltip: 'Delete {kind} {label} from {library}',
+              libraryActionsFor: 'Actions for {label}',
+              librarySelect: 'Select library {label}',
+              librarySelectItem: 'Select {kind} {label} from the library',
+              treeExpandedWhileFiltering: 'Tree stays expanded while filtering.',
+              treeExpand: 'Expand {label}',
+              treeCollapse: 'Collapse {label}',
+              libraryEmptyCreate: 'Create a library, then save components, text items, or container subtrees into it.',
+              libraryEmptyFilter: 'No libraries or library items match that filter.',
+          }),
+          de: Object.freeze({
+              librarySaveTooltip: 'Bibliothek {label} in diesem Browser speichern',
+              libraryDeleteTooltip: 'Bibliothek {label} loeschen',
+              libraryDeleteItemTooltip: '{kind} {label} aus {library} loeschen',
+              libraryActionsFor: 'Aktionen fuer {label}',
+              librarySelect: 'Bibliothek {label} auswaehlen',
+              librarySelectItem: '{kind} {label} aus der Bibliothek auswaehlen',
+              treeExpandedWhileFiltering: 'Der Baum bleibt waehrend des Filterns aufgeklappt.',
+              treeExpand: '{label} aufklappen',
+              treeCollapse: '{label} einklappen',
+              libraryEmptyCreate: 'Erstelle eine Bibliothek und speichere dann Komponenten, Textelemente oder Container-Teilbaeume darin.',
+              libraryEmptyFilter: 'Keine Bibliotheken oder Bibliothekseintraege passen zu diesem Filter.',
+          }),
+      });
+  
       constructor(x, y, projectController, appSettings, workspace, konvaWorkspace, panelHelper, logger, codePanel, componentPanel, workspaceNavigatorPanel, loggerPanel, controlPanelsPanel) {
           this.projectController = projectController;
           this.appSettings = appSettings ?? workspace?.appSettings ?? AppSettings.createEphemeral(logger);
@@ -21760,10 +22126,23 @@
           this.syncApplicationSettingsUi(this.appSettings.getSettings?.());
           this.syncProjectUi();
           this.syncToolbarState();
+          this.refreshLanguageUi();
       }
   
       t(key, params = {}) {
           return globalThis.DoublePhiI18n?.t?.(key, params) ?? key;
+      }
+  
+      tLocal(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = WorkspacePanel.localTranslations[language]?.[key]
+              ?? WorkspacePanel.localTranslations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
       }
   
       setSectionCardTitle(card, title) {
@@ -21999,6 +22378,13 @@
                   this.persistenceStatusElement.innerText = this.t('persistence.ready');
               }
           }
+  
+          this.workspaceNavigatorPanel?.refreshLanguageUi?.();
+          this.componentPanel?.refreshLanguageUi?.();
+          this.loggerPanel?.refreshLanguageUi?.();
+          this.codePanel?.refreshLanguageUi?.();
+          this.controlPanelsPanel?.refreshLanguageUi?.();
+          this.commandLinePanel?.refreshLanguageUi?.();
   
           this.renderHelpPanelContent(this.helpSearchInput?.element?.value ?? '');
           this.syncProjectUi();
@@ -25148,7 +25534,7 @@
           if (entry?.kind === 'library') {
               return [{
                   iconText: ButtonSymbols.persistence,
-                  tooltip: `Save library ${itemLabel} to this browser`,
+                  tooltip: this.tLocal('librarySaveTooltip', { label: itemLabel }),
                   onClick: () => {
                       this.handleSaveSelectedLibraryToBrowser({
                           libraryId: entry.library.id,
@@ -25158,7 +25544,7 @@
                   disabled: this.persistence?.isBrowserCacheAvailable?.() === false,
               }, {
                   iconText: ButtonSymbols.delete,
-                  tooltip: `Delete library ${itemLabel}`,
+                  tooltip: this.tLocal('libraryDeleteTooltip', { label: itemLabel }),
                   onClick: () => {
                       this.handleDeleteSelectedLibraryItem({
                           libraryId: entry.library.id,
@@ -25172,7 +25558,11 @@
               const kindText = this.getLibraryItemTypeLabel(entry.item).toLowerCase();
               return [{
                   iconText: ButtonSymbols.delete,
-                  tooltip: `Delete ${kindText} ${itemLabel} from ${entry.library?.name ?? 'the library'}`,
+                  tooltip: this.tLocal('libraryDeleteItemTooltip', {
+                      kind: kindText,
+                      label: itemLabel,
+                      library: entry.library?.name ?? 'the library',
+                  }),
                   onClick: () => {
                       this.handleDeleteSelectedLibraryItem({
                           libraryId: entry.library.id,
@@ -25196,7 +25586,7 @@
               : entry.item?.name ?? 'item';
           const actions = this.panelHelper.createElement('div', 'dp-workspace-tree-actions');
           actions.setAttribute('role', 'group');
-          actions.setAttribute('aria-label', `Actions for ${itemLabel}`);
+          actions.setAttribute('aria-label', this.tLocal('libraryActionsFor', { label: itemLabel }));
   
           actionDefinitions.forEach((actionDefinition) => {
               const button = this.makeLibraryActionButton(
@@ -25248,8 +25638,11 @@
           button.classList.toggle('is-selected', isSelected);
           button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
           button.setAttribute('aria-label', entry.kind === 'library'
-              ? `Select library ${itemLabel}`.trim()
-              : `Select ${this.getLibraryItemTypeLabel(entry.item).toLowerCase()} ${itemLabel} from the library`.trim());
+              ? this.tLocal('librarySelect', { label: itemLabel }).trim()
+              : this.tLocal('librarySelectItem', {
+                  kind: this.getLibraryItemTypeLabel(entry.item).toLowerCase(),
+                  label: itemLabel,
+              }).trim());
           button.title = itemMetaText;
           button.addEventListener('click', () => {
               this.selectLibraryTreeEntry(entry, { inspect: true });
@@ -25277,9 +25670,9 @@
               toggle.classList.toggle('is-expanded', isExpanded);
               toggle.disabled = tokens.length > 0;
               toggle.title = tokens.length
-                  ? 'Tree stays expanded while filtering.'
-                  : `${isExpanded ? 'Collapse' : 'Expand'} ${itemLabel}`;
-              toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} ${itemLabel}`);
+                  ? this.tLocal('treeExpandedWhileFiltering')
+                  : this.tLocal(isExpanded ? 'treeCollapse' : 'treeExpand', { label: itemLabel });
+              toggle.setAttribute('aria-label', this.tLocal(isExpanded ? 'treeCollapse' : 'treeExpand', { label: itemLabel }));
               toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
               toggle.addEventListener('click', (event) => {
                   event.preventDefault();
@@ -25346,8 +25739,8 @@
   
           if (!treeEntries.length) {
               this.libraryEmptyState.innerText = libraries.length === 0
-                  ? 'Create a library, then save components, text items, or container subtrees into it.'
-                  : 'No libraries or library items match that filter.';
+                  ? this.tLocal('libraryEmptyCreate')
+                  : this.tLocal('libraryEmptyFilter');
               this.libraryTree.appendChild(this.libraryEmptyState);
               this.syncSelectedLibraryInspector(libraries);
               this.syncLibraryActionState(selection);
@@ -25563,6 +25956,244 @@
       static modeView = 'view';
       static modeDesign = 'design';
       static maxJsonTreeDepth = 12;
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelTitle: 'Inspector',
+              panelEyebrow: 'Selection',
+              modeReturnView: 'Return to view mode',
+              modeEnterDesign: 'Enter design mode',
+              searchPlaceholder: 'Search channels, properties, triggers, timers',
+              searchAria: 'Search inspector contents',
+              collapse: 'Collapse {title}',
+              expand: 'Expand {title}',
+              clearSearchToToggle: 'Clear search to toggle {title}',
+              project: 'Project',
+              workspace: 'Workspace',
+              textItem: 'Text Item',
+              component: 'Component',
+              library: 'Library',
+              container: 'Container',
+              packet: 'Packet',
+              savedItem: 'Saved {type}',
+              name: 'Name',
+              description: 'Description',
+              canvasColors: 'Canvas Colors',
+              windows: 'Windows',
+              text: 'Text',
+              formatting: 'Formatting',
+              channels: 'Channels',
+              properties: 'Properties',
+              triggers: 'Triggers',
+              timers: 'Timers',
+              source: 'Source',
+              target: 'Target',
+              payload: 'Payload',
+              type: 'Type',
+              libraryLabel: 'Library',
+              entry: 'Entry',
+              savedSnapshot: 'Saved Snapshot',
+              children: 'Children',
+              descendants: 'Descendants',
+              savedItems: 'Saved Items',
+              manualPropertyPromotion: 'Manual Property Promotion',
+              code: 'Code',
+              codeSections: 'Code Sections',
+              colorScheme: 'Color Scheme',
+              colorSchemeDescription: 'Start from a preset palette, then tweak the canvas colors directly if you want something more custom.',
+              custom: 'Custom',
+              colorSchemeAria: '{label} canvas color scheme',
+              colorComponents: 'Components',
+              colorComponentsDescription: 'Base fill color for components and containers.',
+              colorHeaders: 'Headers',
+              colorHeadersDescription: 'Title bar color for components and containers.',
+              colorSelection: 'Selection',
+              colorSelectionDescription: 'Selection and emphasis color for active components and containers.',
+              colorChannelsDescription: 'Socket and line color for channel connections.',
+              colorPropertiesDescription: 'Socket and line color for property connections.',
+              projectDescriptionPlaceholder: 'Add a project description',
+              projectDescriptionAria: 'Project description',
+              workspaceDescriptionPlaceholder: 'Add a workspace description',
+              workspaceDescriptionAria: 'Workspace description',
+              workspaceWindowsDescription: 'Close every window and restore the default dock layout for this workspace.',
+              resetWindows: 'Reset Windows',
+              libraryDescriptionPlaceholder: 'Add a library description',
+              libraryDescriptionAria: 'Library description',
+              componentSearchEmpty: 'No channels, properties, triggers, or timers match this search.',
+              componentViewEmpty: 'No channels, properties, timers, or triggers on this component yet.',
+              emptySelection: 'Select a text item, component, container, packet, or library to inspect it.',
+              alignment: 'Alignment',
+              alignLeft: 'Left',
+              alignCenter: 'Center',
+              alignRight: 'Right',
+              listStyle: 'List Style',
+              listPlainText: 'Plain Text',
+              listBulleted: 'Bullet Points',
+              listNumbered: 'Numbered List',
+              addProperty: 'Add Property',
+              addChannel: 'Add Channel',
+              addTimer: 'Add Timer',
+              addTrigger: 'Add Trigger',
+              newPropertyName: 'New Property',
+              newChannelName: 'New Channel',
+              newTimerName: 'New Timer',
+              newTriggerName: 'New Trigger',
+              trigger: 'Trigger',
+              options: 'Options',
+              oneValuePerLine: 'One value per line',
+              propertyViewDesign: 'Property view design',
+              selector: 'Selector',
+              onOff: 'On / Off',
+              freeText: 'Free Text',
+              numberOnly: 'Number Only',
+              valueSlider: 'Value Slider',
+              progress: 'Progress',
+              minimum: 'Minimum',
+              maximum: 'Maximum',
+              step: 'Step',
+              searchPromotableProperties: 'Search promotable properties',
+              promotablePlaceholder: 'componentname.propertyname',
+              add: 'Add',
+              typeContainer: 'Container',
+              typeTextItem: 'Text Item',
+              typeComponent: 'Component',
+              typeItem: 'Item',
+              property: 'Property',
+              channel: 'Channel',
+              timer: 'Timer',
+              savedItemCount: '{count} saved item{suffix}',
+              childCount: '{count} direct child{suffix}',
+              toggleProperty: 'Toggle {name}',
+              selectValue: 'Select value',
+              currentValue: '{value} (current)',
+              notANumber: 'Not a number',
+              notAZeroOneValue: 'Not a 0-1 value',
+              jsonCircular: '[Circular]',
+              jsonMaxDepth: '[Max depth reached]',
+              jsonEmpty: '(empty)',
+              jsonArray: 'Array',
+              jsonObject: 'Object',
+              jsonItemCount: '({count} item{suffix})',
+              jsonKeyCount: '({count} key{suffix})',
+          }),
+          de: Object.freeze({
+              panelTitle: 'Inspektor',
+              panelEyebrow: 'Auswahl',
+              modeReturnView: 'Zur Ansicht zurueckkehren',
+              modeEnterDesign: 'Designmodus aktivieren',
+              searchPlaceholder: 'Kanaele, Eigenschaften, Trigger und Timer durchsuchen',
+              searchAria: 'Inspektorinhalte durchsuchen',
+              collapse: '{title} einklappen',
+              expand: '{title} aufklappen',
+              clearSearchToToggle: 'Suche leeren, um {title} umzuschalten',
+              project: 'Projekt',
+              workspace: 'Workspace',
+              textItem: 'Textelement',
+              component: 'Komponente',
+              library: 'Bibliothek',
+              container: 'Container',
+              packet: 'Paket',
+              savedItem: 'Gespeichertes {type}',
+              name: 'Name',
+              description: 'Beschreibung',
+              canvasColors: 'Canvas-Farben',
+              windows: 'Fenster',
+              text: 'Text',
+              formatting: 'Formatierung',
+              channels: 'Kanaele',
+              properties: 'Eigenschaften',
+              triggers: 'Trigger',
+              timers: 'Timer',
+              source: 'Quelle',
+              target: 'Ziel',
+              payload: 'Nutzdaten',
+              type: 'Typ',
+              libraryLabel: 'Bibliothek',
+              entry: 'Eintrag',
+              savedSnapshot: 'Gespeicherter Snapshot',
+              children: 'Kinder',
+              descendants: 'Nachfahren',
+              savedItems: 'Gespeicherte Elemente',
+              manualPropertyPromotion: 'Manuelle Eigenschaften-Promotion',
+              code: 'Code',
+              codeSections: 'Code-Abschnitte',
+              colorScheme: 'Farbschema',
+              colorSchemeDescription: 'Beginne mit einer Preset-Palette und passe die Canvas-Farben danach direkt an, wenn du etwas Individuelleres moechtest.',
+              custom: 'Benutzerdefiniert',
+              colorSchemeAria: '{label} Canvas-Farbschema',
+              colorComponents: 'Komponenten',
+              colorComponentsDescription: 'Grundfuellfarbe fuer Komponenten und Container.',
+              colorHeaders: 'Kopfzeilen',
+              colorHeadersDescription: 'Titelleistenfarbe fuer Komponenten und Container.',
+              colorSelection: 'Auswahl',
+              colorSelectionDescription: 'Auswahl- und Hervorhebungsfarbe fuer aktive Komponenten und Container.',
+              colorChannelsDescription: 'Anschluss- und Linienfarbe fuer Kanalverbindungen.',
+              colorPropertiesDescription: 'Anschluss- und Linienfarbe fuer Eigenschaftsverbindungen.',
+              projectDescriptionPlaceholder: 'Projektbeschreibung hinzufuegen',
+              projectDescriptionAria: 'Projektbeschreibung',
+              workspaceDescriptionPlaceholder: 'Workspace-Beschreibung hinzufuegen',
+              workspaceDescriptionAria: 'Workspace-Beschreibung',
+              workspaceWindowsDescription: 'Schliesst alle Fenster und stellt das Standard-Docklayout fuer diesen Workspace wieder her.',
+              resetWindows: 'Fenster zuruecksetzen',
+              libraryDescriptionPlaceholder: 'Bibliotheksbeschreibung hinzufuegen',
+              libraryDescriptionAria: 'Bibliotheksbeschreibung',
+              componentSearchEmpty: 'Keine Kanaele, Eigenschaften, Trigger oder Timer passen zu dieser Suche.',
+              componentViewEmpty: 'Diese Komponente hat noch keine Kanaele, Eigenschaften, Timer oder Trigger.',
+              emptySelection: 'Waehle ein Textelement, eine Komponente, einen Container, ein Paket oder eine Bibliothek aus, um es anzuzeigen.',
+              alignment: 'Ausrichtung',
+              alignLeft: 'Links',
+              alignCenter: 'Zentriert',
+              alignRight: 'Rechts',
+              listStyle: 'Listenstil',
+              listPlainText: 'Fliesstext',
+              listBulleted: 'Aufzaehlungspunkte',
+              listNumbered: 'Nummerierte Liste',
+              addProperty: 'Eigenschaft hinzufuegen',
+              addChannel: 'Kanal hinzufuegen',
+              addTimer: 'Timer hinzufuegen',
+              addTrigger: 'Trigger hinzufuegen',
+              newPropertyName: 'Neue Eigenschaft',
+              newChannelName: 'Neuer Kanal',
+              newTimerName: 'Neuer Timer',
+              newTriggerName: 'Neuer Trigger',
+              trigger: 'Trigger',
+              options: 'Optionen',
+              oneValuePerLine: 'Ein Wert pro Zeile',
+              propertyViewDesign: 'Eigenschaftsansicht gestalten',
+              selector: 'Auswahl',
+              onOff: 'Ein / Aus',
+              freeText: 'Freitext',
+              numberOnly: 'Nur Zahlen',
+              valueSlider: 'Wertregler',
+              progress: 'Fortschritt',
+              minimum: 'Minimum',
+              maximum: 'Maximum',
+              step: 'Schritt',
+              searchPromotableProperties: 'Promotbare Eigenschaften durchsuchen',
+              promotablePlaceholder: 'komponentenname.eigenschaftsname',
+              add: 'Hinzufuegen',
+              typeContainer: 'Container',
+              typeTextItem: 'Textelement',
+              typeComponent: 'Komponente',
+              typeItem: 'Element',
+              property: 'Eigenschaft',
+              channel: 'Kanal',
+              timer: 'Timer',
+              savedItemCount: '{count} gespeicherte Elemente',
+              childCount: '{count} direkte Kinder',
+              toggleProperty: '{name} umschalten',
+              selectValue: 'Wert auswaehlen',
+              currentValue: '{value} (aktuell)',
+              notANumber: 'Keine Zahl',
+              notAZeroOneValue: 'Kein 0-1-Wert',
+              jsonCircular: '[Zirkulaer]',
+              jsonMaxDepth: '[Maximale Tiefe erreicht]',
+              jsonEmpty: '(leer)',
+              jsonArray: 'Array',
+              jsonObject: 'Objekt',
+              jsonItemCount: '({count} Eintraege)',
+              jsonKeyCount: '({count} Schluessel)',
+          }),
+      });
   
       listenerKey = 'componentPanel';
   
@@ -25573,12 +26204,16 @@
           this.mode = ComponentPanel.modeDesign;
           this.liveRefreshers = [];
           this.refreshIntervalId = null;
+          this.componentQuickActionsElement = null;
+          this.componentQuickActionsResizeObserver = null;
+          this.componentQuickActionsFrameId = null;
+          this.componentQuickActionsCancelFrame = null;
           this.collapsedSectionKeys = new Set();
           this.inspectorSearchQuery = '';
           this.externalInspectorContext = null;
           this.panel = new Panel(x, y, panelHelper, {
-              title: 'Inspector',
-              eyebrow: 'Selection',
+              title: this.t('panelTitle'),
+              eyebrow: this.t('panelEyebrow'),
               variant: 'inspector',
               dockIconText: ButtonSymbols.inspect,
               persistenceId: 'workspace:inspector',
@@ -25607,10 +26242,34 @@
           this.panel.dockTo('right');
       }
   
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = ComponentPanel.translations[language]?.[key]
+              ?? ComponentPanel.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setTitle?.(this.t('panelTitle'));
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+          this.syncModeButton();
+          if (this.selectedComponent || this.externalInspectorContext) {
+              this.renderSelectedItem();
+              return;
+          }
+          this.renderEmptyState();
+      }
+  
       handleVisibilityChange(isVisible) {
           if (isVisible) {
               this.startRefreshLoop();
               this.refreshDynamicState();
+              this.queueComponentQuickActionLayoutSync();
               return;
           }
           this.stopRefreshLoop();
@@ -25633,9 +26292,95 @@
           this.liveRefreshers = [];
       }
   
+      disconnectComponentQuickActionLayoutObserver() {
+          if (this.componentQuickActionsResizeObserver) {
+              this.componentQuickActionsResizeObserver.disconnect();
+              this.componentQuickActionsResizeObserver = null;
+          }
+          if (this.componentQuickActionsFrameId != null) {
+              this.componentQuickActionsCancelFrame?.(this.componentQuickActionsFrameId);
+              this.componentQuickActionsFrameId = null;
+              this.componentQuickActionsCancelFrame = null;
+          }
+          this.componentQuickActionsElement = null;
+      }
+  
+      queueComponentQuickActionLayoutSync() {
+          if (this.componentQuickActionsFrameId != null) return;
+          const scheduleFrame = window.requestAnimationFrame?.bind(window)
+              ?? window.setTimeout.bind(window);
+          this.componentQuickActionsCancelFrame = window.cancelAnimationFrame?.bind(window)
+              ?? window.clearTimeout.bind(window);
+          this.componentQuickActionsFrameId = scheduleFrame(() => {
+              this.componentQuickActionsFrameId = null;
+              this.componentQuickActionsCancelFrame = null;
+              this.syncComponentQuickActionLayout();
+          });
+      }
+  
+      observeComponentQuickActions(container) {
+          this.disconnectComponentQuickActionLayoutObserver();
+          if (!(container instanceof HTMLElement)) return;
+          this.componentQuickActionsElement = container;
+          if (typeof ResizeObserver === 'function') {
+              this.componentQuickActionsResizeObserver = new ResizeObserver(() => {
+                  this.queueComponentQuickActionLayoutSync();
+              });
+              this.componentQuickActionsResizeObserver.observe(container);
+          }
+          this.queueComponentQuickActionLayoutSync();
+      }
+  
+      syncComponentQuickActionLayout() {
+          const container = this.componentQuickActionsElement;
+          if (!(container instanceof HTMLElement) || !container.isConnected) return;
+          const buttons = Array.from(container.querySelectorAll('.dp-component-quick-action'));
+          if (!buttons.length) return;
+          const availableWidth = container.clientWidth || container.getBoundingClientRect().width || 0;
+          if (!(availableWidth > 0)) return;
+  
+          container.classList.remove('is-compact');
+          const computedStyle = window.getComputedStyle(container);
+          const gapValue = computedStyle.columnGap && computedStyle.columnGap !== 'normal'
+              ? computedStyle.columnGap
+              : computedStyle.gap;
+          const gap = Number.parseFloat(gapValue) || 0;
+          const requiredWidth = buttons.reduce((totalWidth, button) => (
+              totalWidth + (button.getBoundingClientRect().width || button.offsetWidth || 0)
+          ), 0) + (Math.max(0, buttons.length - 1) * gap);
+  
+          container.classList.toggle('is-compact', requiredWidth > (availableWidth + 1));
+      }
+  
       registerLiveRefresher(refresher) {
           if (typeof refresher !== 'function') return;
           this.liveRefreshers.push(refresher);
+      }
+  
+      replaceRootContent(content) {
+          this.disconnectComponentQuickActionLayoutObserver();
+          this.root.replaceChildren(content);
+      }
+  
+      getComponentQuickActionGlyph(kind) {
+          if (kind === 'property') return 'P';
+          if (kind === 'channel') return 'C';
+          if (kind === 'timer') return '⏲';
+          if (kind === 'trigger') return ButtonSymbols.trigger;
+          return ButtonSymbols.add;
+      }
+  
+      createComponentQuickActionButton(kind, label, onClick) {
+          const button = this.panelHelper.makeButton('', '', onClick);
+          const glyph = this.panelHelper.createElement('span', 'dp-component-quick-action-glyph');
+          const text = this.panelHelper.createElement('span', 'dp-component-quick-action-label');
+          glyph.innerText = this.getComponentQuickActionGlyph(kind);
+          text.innerText = label;
+          button.classList.add('dp-btn-flat', 'dp-component-quick-action');
+          button.title = label;
+          button.setAttribute('aria-label', label);
+          button.replaceChildren(glyph, text);
+          return button;
       }
   
       refreshDynamicState() {
@@ -25694,8 +26439,8 @@
           if (this.mode === ComponentPanel.modeDesign) {
               this.panel.setLeadingHeaderAction({
                   iconText: ButtonSymbols.inspect,
-                  tooltip: 'Return to view mode',
-                  ariaLabel: 'Return to view mode',
+                  tooltip: this.t('modeReturnView'),
+                  ariaLabel: this.t('modeReturnView'),
                   onClick: () => {
                       this.setMode(ComponentPanel.modeView);
                   },
@@ -25705,8 +26450,8 @@
   
           this.panel.setLeadingHeaderAction({
               iconText: ButtonSymbols.settings,
-              tooltip: 'Enter design mode',
-              ariaLabel: 'Enter design mode',
+              tooltip: this.t('modeEnterDesign'),
+              ariaLabel: this.t('modeEnterDesign'),
               onClick: () => {
                   this.setMode(ComponentPanel.modeDesign);
               },
@@ -25972,10 +26717,10 @@
   
           toggle.classList.toggle('is-expanded', isExpanded === true);
           toggle.setAttribute('aria-expanded', isExpanded === true ? 'true' : 'false');
-          toggle.setAttribute('aria-label', `${isExpanded === true ? 'Collapse' : 'Expand'} ${title}`);
+          toggle.setAttribute('aria-label', this.t(isExpanded === true ? 'collapse' : 'expand', { title }));
           toggle.title = isSearchActive
-              ? `Clear search to toggle ${title}`
-              : `${isExpanded === true ? 'Collapse' : 'Expand'} ${title}`;
+              ? this.t('clearSearchToToggle', { title })
+              : this.t(isExpanded === true ? 'collapse' : 'expand', { title });
           toggle.disabled = isSearchActive;
       }
   
@@ -26036,8 +26781,8 @@
           searchInput.value = this.inspectorSearchQuery;
           searchInput.autocomplete = 'off';
           searchInput.spellcheck = false;
-          searchInput.placeholder = 'Search channels, properties, triggers, timers';
-          searchInput.setAttribute('aria-label', 'Search inspector contents');
+          searchInput.placeholder = this.t('searchPlaceholder');
+          searchInput.setAttribute('aria-label', this.t('searchAria'));
           searchInput.setAttribute('enterkeyhint', 'search');
           searchInput.addEventListener('input', () => {
               this.inspectorSearchQuery = searchInput.value;
@@ -26102,10 +26847,10 @@
   
       getInspectorElementSectionTitle(elementOrType) {
           const typeKey = this.getInspectorElementTypeKey(elementOrType);
-          if (typeKey === 'property') return 'Properties';
-          if (typeKey === 'channel') return 'Channels';
-          if (typeKey === 'trigger') return 'Triggers';
-          if (typeKey === 'timer') return 'Timers';
+          if (typeKey === 'property') return this.t('properties');
+          if (typeKey === 'channel') return this.t('channels');
+          if (typeKey === 'trigger') return this.t('triggers');
+          if (typeKey === 'timer') return this.t('timers');
           return null;
       }
   
@@ -26233,13 +26978,13 @@
           }));
   
           return this.createProjectInspectorChoiceSettingRow(
-              'Color Scheme',
-              'Start from a preset palette, then tweak the canvas colors directly if you want something more custom.',
+              this.t('colorScheme'),
+              this.t('colorSchemeDescription'),
               presetChoices,
               {
                   normalizeValue: (value) => Project.getColorSchemePreset(value)?.id ?? null,
-                  formatValue: (value, activeChoice) => activeChoice?.label ?? 'Custom',
-                  getAriaLabel: (choice) => `${choice.label} canvas color scheme`,
+                  formatValue: (value, activeChoice) => activeChoice?.label ?? this.t('custom'),
+                  getAriaLabel: (choice) => this.t('colorSchemeAria', { label: choice.label }),
                   initialValue: Project.getMatchingColorSchemeId(
                       projectController?.getProjectSettings?.(),
                   ),
@@ -26367,11 +27112,11 @@
           settingsShell.appendChild(colorSchemeRow.row);
   
           [
-              ['Components', 'Base fill color for components and containers.', 'nodeBodyColor', Project.defaultNodeBodyColor],
-              ['Headers', 'Title bar color for components and containers.', 'nodeHeaderColor', Project.defaultNodeHeaderColor],
-              ['Selection', 'Selection and emphasis color for active components and containers.', 'nodeSelectionColor', Project.defaultNodeSelectionColor],
-              ['Channels', 'Socket and line color for channel connections.', 'channelConnectionColor', Project.defaultChannelConnectionColor],
-              ['Properties', 'Socket and line color for property connections.', 'propertyConnectionColor', Project.defaultPropertyConnectionColor],
+              [this.t('colorComponents'), this.t('colorComponentsDescription'), 'nodeBodyColor', Project.defaultNodeBodyColor],
+              [this.t('colorHeaders'), this.t('colorHeadersDescription'), 'nodeHeaderColor', Project.defaultNodeHeaderColor],
+              [this.t('colorSelection'), this.t('colorSelectionDescription'), 'nodeSelectionColor', Project.defaultNodeSelectionColor],
+              [this.t('channels'), this.t('colorChannelsDescription'), 'channelConnectionColor', Project.defaultChannelConnectionColor],
+              [this.t('properties'), this.t('colorPropertiesDescription'), 'propertyConnectionColor', Project.defaultPropertyConnectionColor],
           ].forEach(([title, description, settingKey, fallbackColor]) => {
               const colorField = this.createProjectInspectorColorSettingRow(
                   projectController,
@@ -26390,7 +27135,7 @@
       }
   
       renderProjectInspectorSelection(projectController, options = {}) {
-          const { content: projectContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Project');
+          const { content: projectContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('project'));
           const projectName = projectController?.getProjectName?.() ?? Project.getDefaultName();
           const projectDescription = projectController?.getProjectDescription?.() ?? '';
           const nameInput = this.panelHelper.createInput(projectName, (value) => {
@@ -26404,30 +27149,30 @@
           );
           const colorSchemeSection = this.panelHelper.createElement('div', 'dp-inspector-section');
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(nameInput.element);
   
           descriptionInput.value = projectDescription;
-          descriptionInput.placeholder = 'Add a project description';
+          descriptionInput.placeholder = this.t('projectDescriptionPlaceholder');
           descriptionInput.spellcheck = true;
           descriptionInput.rows = 5;
-          descriptionInput.setAttribute('aria-label', 'Project description');
+          descriptionInput.setAttribute('aria-label', this.t('projectDescriptionAria'));
           descriptionInput.addEventListener('input', () => {
               options.onDescriptionChange?.(descriptionInput.value);
               projectController?.setProjectDescription?.(descriptionInput.value);
           });
   
-          descriptionSection.appendChild(this.panelHelper.createSectionTitle('Description'));
+          descriptionSection.appendChild(this.panelHelper.createSectionTitle(this.t('description')));
           descriptionSection.appendChild(descriptionInput);
           inspectorSections.appendChild(descriptionSection);
   
-          colorSchemeSection.appendChild(this.panelHelper.createSectionTitle('Canvas Colors'));
+          colorSchemeSection.appendChild(this.panelHelper.createSectionTitle(this.t('canvasColors')));
           colorSchemeSection.appendChild(this.buildProjectInspectorColorSettings(projectController));
           inspectorSections.appendChild(colorSchemeSection);
   
           inspectorCard.body.appendChild(inspectorSections);
           projectContent.appendChild(inspectorCard.element);
-          this.root.replaceChildren(projectContent);
+          this.replaceRootContent(projectContent);
       }
   
       renderWorkspaceInspectorSelection(projectController, workspaceId, options = {}) {
@@ -26438,7 +27183,7 @@
               return;
           }
   
-          const { content: workspaceContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Workspace');
+          const { content: workspaceContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('workspace'));
           const workspaceDescription = workspaceRecord.description ?? '';
           const nameInput = this.panelHelper.createInput(workspaceRecord.name ?? '', (value) => {
               options.onNameChange?.(value);
@@ -26452,7 +27197,7 @@
           const windowsSection = this.panelHelper.createElement('div', 'dp-inspector-section');
           const windowsDescription = this.panelHelper.createElement('div', 'dp-settings-description');
           const windowsActions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          const resetWindowsButton = this.panelHelper.makeButton('secondary', 'Reset Windows', () => {
+          const resetWindowsButton = this.panelHelper.makeButton('secondary', this.t('resetWindows'), () => {
               options.onResetWindows?.(workspaceRecord);
               if (typeof projectController?.resetWorkspaceWindowLayout === 'function') {
                   projectController.resetWorkspaceWindowLayout(workspaceRecord.id);
@@ -26461,24 +27206,24 @@
               projectController?.resetWindowLayout?.();
           });
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(nameInput.element);
   
           descriptionInput.value = workspaceDescription;
-          descriptionInput.placeholder = 'Add a workspace description';
+          descriptionInput.placeholder = this.t('workspaceDescriptionPlaceholder');
           descriptionInput.spellcheck = true;
           descriptionInput.rows = 5;
-          descriptionInput.setAttribute('aria-label', 'Workspace description');
+          descriptionInput.setAttribute('aria-label', this.t('workspaceDescriptionAria'));
           descriptionInput.addEventListener('input', () => {
               options.onDescriptionChange?.(descriptionInput.value);
               projectController?.setWorkspaceDescription?.(workspaceRecord.id, descriptionInput.value);
           });
-          descriptionSection.appendChild(this.panelHelper.createSectionTitle('Description'));
+          descriptionSection.appendChild(this.panelHelper.createSectionTitle(this.t('description')));
           descriptionSection.appendChild(descriptionInput);
           inspectorSections.appendChild(descriptionSection);
   
-          windowsDescription.innerText = 'Close every window and restore the default dock layout for this workspace.';
-          windowsSection.appendChild(this.panelHelper.createSectionTitle('Windows'));
+          windowsDescription.innerText = this.t('workspaceWindowsDescription');
+          windowsSection.appendChild(this.panelHelper.createSectionTitle(this.t('windows')));
           windowsActions.appendChild(resetWindowsButton);
           windowsSection.appendChild(windowsDescription);
           windowsSection.appendChild(windowsActions);
@@ -26486,11 +27231,11 @@
   
           inspectorCard.body.appendChild(inspectorSections);
           workspaceContent.appendChild(inspectorCard.element);
-          this.root.replaceChildren(workspaceContent);
+          this.replaceRootContent(workspaceContent);
       }
   
       renderTextItemInspector(textItem) {
-          const { content: textContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Text Item');
+          const { content: textContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('textItem'));
           const nameInput = this.panelHelper.createInput(textItem.name, (value) => {
               textItem.setName(value);
           });
@@ -26499,12 +27244,12 @@
           const formattingSection = this.panelHelper.createElement('div', 'dp-inspector-section');
           const formattingGrid = this.panelHelper.createElement('div', 'dp-inspector-property-config');
           const alignmentField = this.createInspectorSelectField(
-              'Alignment',
+              this.t('alignment'),
               'dp-text-format-alignment',
               [
-                  { value: TextItem.alignmentLeft, label: 'Left' },
-                  { value: TextItem.alignmentCenter, label: 'Center' },
-                  { value: TextItem.alignmentRight, label: 'Right' },
+                  { value: TextItem.alignmentLeft, label: this.t('alignLeft') },
+                  { value: TextItem.alignmentCenter, label: this.t('alignCenter') },
+                  { value: TextItem.alignmentRight, label: this.t('alignRight') },
               ],
               textItem.getFormat().alignment,
               (value) => {
@@ -26512,12 +27257,12 @@
               },
           );
           const listStyleField = this.createInspectorSelectField(
-              'List Style',
+              this.t('listStyle'),
               'dp-text-format-list-style',
               [
-                  { value: TextItem.listStyleNone, label: 'Plain Text' },
-                  { value: TextItem.listStyleBulleted, label: 'Bullet Points' },
-                  { value: TextItem.listStyleNumbered, label: 'Numbered List' },
+                  { value: TextItem.listStyleNone, label: this.t('listPlainText') },
+                  { value: TextItem.listStyleBulleted, label: this.t('listBulleted') },
+                  { value: TextItem.listStyleNumbered, label: this.t('listNumbered') },
               ],
               textItem.getFormat().listStyle,
               (value) => {
@@ -26546,12 +27291,12 @@
           textItem.observable.addFieldListener('text', syncTextValue, this.listenerKey);
           textItem.observable.addFieldListener('format', syncFormatValue, this.listenerKey);
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(nameInput.element);
   
-          textSection.appendChild(this.panelHelper.createSectionTitle('Text'));
+          textSection.appendChild(this.panelHelper.createSectionTitle(this.t('text')));
           textSection.appendChild(textEditor);
-          formattingSection.appendChild(this.panelHelper.createSectionTitle('Formatting'));
+          formattingSection.appendChild(this.panelHelper.createSectionTitle(this.t('formatting')));
           formattingGrid.appendChild(alignmentField.field);
           formattingGrid.appendChild(listStyleField.field);
           formattingSection.appendChild(formattingGrid);
@@ -26564,7 +27309,7 @@
       }
   
       renderComponentDesignMode(component, actions) {
-          const { content: componentContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Component');
+          const { content: componentContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('component'));
           const componentControls = this.panelHelper.createElement('div', 'dp-inline-actions dp-component-quick-actions', 'component-controls');
           const componentName = this.panelHelper.createInput(component.name, (value) => {
               component.setName(value);
@@ -26575,24 +27320,24 @@
           componentControls.appendChild(actions.addChannel);
           componentControls.appendChild(actions.addTimer);
           componentControls.appendChild(actions.addTrigger);
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(componentName.element);
           inspectorCard.body.appendChild(componentControls);
   
-          this.AppendSection(component.getChannels().length, 'Channels', inspectorSections, (body) => {
+          this.AppendSection(component.getChannels().length, this.t('channels'), inspectorSections, (body) => {
               this.AddChannels(component, body, (channel) => component.deleteConnectable(channel));
           });
-          this.AppendSection(component.getProperties().length, 'Properties', inspectorSections, (body) => {
+          this.AppendSection(component.getProperties().length, this.t('properties'), inspectorSections, (body) => {
               this.AddProperties(component, body, (property) => component.deleteConnectable(property));
           });
-          this.AppendSection(component.getTriggers().length, 'Triggers', inspectorSections, (body) => {
+          this.AppendSection(component.getTriggers().length, this.t('triggers'), inspectorSections, (body) => {
               this.AddTriggers(component, body);
           });
-          this.AppendSection(component.getTimers().length, 'Timers', inspectorSections, (body) => {
+          this.AppendSection(component.getTimers().length, this.t('timers'), inspectorSections, (body) => {
               this.AddTimers(component, body);
           });
           const searchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state dp-inspector-search-empty-state');
-          searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
+          searchEmptyState.innerText = this.t('componentSearchEmpty');
           searchEmptyState.hidden = true;
           inspectorSections.appendChild(searchEmptyState);
           inspectorCard.body.appendChild(this.createComponentInspectorSearchShell(inspectorSections, searchEmptyState));
@@ -26603,26 +27348,26 @@
       }
   
       renderComponentViewMode(component) {
-          const { content: componentContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Component');
+          const { content: componentContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('component'));
           inspectorSections.classList.add('dp-inspector-view-sections');
           const componentName = this.panelHelper.createInput(component.name, (value) => {
               component.setName(value);
           });
           component.observable.addFieldListener('name', componentName.setValueFunc, this.listenerKey);
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(componentName.element);
   
-          this.AppendSection(component.getChannels().length, 'Channels', inspectorSections, (body) => {
+          this.AppendSection(component.getChannels().length, this.t('channels'), inspectorSections, (body) => {
               this.AppendChannelViewCards(component, body);
           });
-          this.AppendSection(component.getProperties().length, 'Properties', inspectorSections, (body) => {
+          this.AppendSection(component.getProperties().length, this.t('properties'), inspectorSections, (body) => {
               this.AppendPropertyViewCards(component, body);
           });
-          this.AppendSection(component.getTriggers().length, 'Triggers', inspectorSections, (body) => {
+          this.AppendSection(component.getTriggers().length, this.t('triggers'), inspectorSections, (body) => {
               this.AppendTriggerViewCards(component, body);
           });
-          this.AppendSection(component.getTimers().length, 'Timers', inspectorSections, (body) => {
+          this.AppendSection(component.getTimers().length, this.t('timers'), inspectorSections, (body) => {
               this.AppendTimerViewCards(component, body);
           });
   
@@ -26633,12 +27378,12 @@
               && component.getTimers().length === 0
           ) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'No channels, properties, timers, or triggers on this component yet.';
+              emptyState.innerText = this.t('componentViewEmpty');
               inspectorSections.appendChild(emptyState);
           }
   
           const searchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state dp-inspector-search-empty-state');
-          searchEmptyState.innerText = 'No channels, properties, triggers, or timers match this search.';
+          searchEmptyState.innerText = this.t('componentSearchEmpty');
           searchEmptyState.hidden = true;
           inspectorSections.appendChild(searchEmptyState);
           inspectorCard.body.appendChild(this.createComponentViewInspectorSearchShell(inspectorSections, searchEmptyState));
@@ -26654,7 +27399,7 @@
               return;
           }
   
-          const { content: libraryContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Library');
+          const { content: libraryContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('library'));
           const nameInput = this.panelHelper.createInput(library?.name ?? '', (value) => {
               options.onNameChange?.(value);
           });
@@ -26664,24 +27409,24 @@
               'dp-load-textarea dp-control-design-textarea',
           );
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(nameInput.element);
   
           descriptionInput.value = library?.description ?? '';
-          descriptionInput.placeholder = 'Add a library description';
+          descriptionInput.placeholder = this.t('libraryDescriptionPlaceholder');
           descriptionInput.spellcheck = true;
           descriptionInput.rows = 5;
-          descriptionInput.setAttribute('aria-label', 'Library description');
+          descriptionInput.setAttribute('aria-label', this.t('libraryDescriptionAria'));
           descriptionInput.addEventListener('input', () => {
               options.onDescriptionChange?.(descriptionInput.value);
           });
   
-          descriptionSection.appendChild(this.panelHelper.createSectionTitle('Description'));
+          descriptionSection.appendChild(this.panelHelper.createSectionTitle(this.t('description')));
           descriptionSection.appendChild(descriptionInput);
           inspectorSections.appendChild(descriptionSection);
           inspectorCard.body.appendChild(inspectorSections);
           libraryContent.appendChild(inspectorCard.element);
-          this.root.replaceChildren(libraryContent);
+          this.replaceRootContent(libraryContent);
       }
   
       getLibraryInspectorSelectionKey(library, options = {}) {
@@ -26696,10 +27441,10 @@
       }
   
       getLibraryInspectorItemTypeLabel(item) {
-          if (item?.type === 'container') return 'Container';
-          if (item?.type === 'text') return 'Text Item';
-          if (item?.type === 'component') return 'Component';
-          return 'Item';
+          if (item?.type === 'container') return this.t('typeContainer');
+          if (item?.type === 'text') return this.t('typeTextItem');
+          if (item?.type === 'component') return this.t('typeComponent');
+          return this.t('typeItem');
       }
   
       getLibraryInspectorItems(libraryEntry) {
@@ -26833,31 +27578,31 @@
           const triggers = Array.isArray(item?.triggers) ? item.triggers : [];
           const timers = Array.isArray(item?.timers) ? item.timers : [];
   
-          this.AppendReadonlyCompactSection('Properties', properties, inspectorSections, (property) => (
+          this.AppendReadonlyCompactSection(this.t('properties'), properties, inspectorSections, (property) => (
               this.createReadonlyCompactInspectorItem(
-                  property?.name ?? 'Property',
+                  property?.name ?? this.t('property'),
                   property?.value,
                   'dp-inspector-property-view',
               )
           ), sectionOwner);
-          this.AppendReadonlyCompactSection('Channels', channels, inspectorSections, (channel) => (
-              this.createReadonlyCompactInspectorItem(channel?.name ?? 'Channel')
+          this.AppendReadonlyCompactSection(this.t('channels'), channels, inspectorSections, (channel) => (
+              this.createReadonlyCompactInspectorItem(channel?.name ?? this.t('channel'))
           ), sectionOwner);
-          this.AppendReadonlyCompactSection('Triggers', triggers, inspectorSections, (trigger) => (
-              this.createReadonlyCompactInspectorItem(trigger?.name ?? 'Trigger')
+          this.AppendReadonlyCompactSection(this.t('triggers'), triggers, inspectorSections, (trigger) => (
+              this.createReadonlyCompactInspectorItem(trigger?.name ?? this.t('trigger'))
           ), sectionOwner);
-          this.AppendReadonlyCompactSection('Timers', timers, inspectorSections, (timer) => (
+          this.AppendReadonlyCompactSection(this.t('timers'), timers, inspectorSections, (timer) => (
               this.createReadonlyCompactInspectorItem(
-                  timer?.name ?? 'Timer',
+                  timer?.name ?? this.t('timer'),
                   `${Number(timer?.intervalms) || 0} ms`,
               )
           ), sectionOwner);
   
           if (String(item?.code ?? '').trim()) {
-              this.AppendReadonlyBlock('Code', item.code, inspectorSections);
+              this.AppendReadonlyBlock(this.t('code'), item.code, inspectorSections);
           }
           if (Array.isArray(item?.codeSections) && item.codeSections.length > 0) {
-              this.AppendJsonTreeField('Code Sections', item.codeSections, inspectorSections);
+              this.AppendJsonTreeField(this.t('codeSections'), item.codeSections, inspectorSections);
           }
       }
   
@@ -26868,24 +27613,22 @@
               ? item.manualPromotedProperties
               : [];
   
-          this.AppendReadonlyField(
-              'Children',
-              `${childItems.length} direct child${childItems.length === 1 ? '' : 'ren'}`,
-              inspectorSections,
-          );
-          this.AppendReadonlyField(
-              'Descendants',
-              `${descendantItems.length} saved item${descendantItems.length === 1 ? '' : 's'}`,
-              inspectorSections,
-          );
-          this.AppendReadonlyCompactSection('Saved Items', childItems, inspectorSections, (childItem) => (
+          this.AppendReadonlyField(this.t('children'), this.t('childCount', {
+              count: childItems.length,
+              suffix: childItems.length === 1 ? '' : 'ren',
+          }), inspectorSections);
+          this.AppendReadonlyField(this.t('descendants'), this.t('savedItemCount', {
+              count: descendantItems.length,
+              suffix: descendantItems.length === 1 ? '' : 's',
+          }), inspectorSections);
+          this.AppendReadonlyCompactSection(this.t('savedItems'), childItems, inspectorSections, (childItem) => (
               this.createReadonlyCompactInspectorItem(
                   childItem?.name ?? this.getLibraryInspectorItemTypeLabel(childItem),
                   this.getLibraryInspectorItemTypeLabel(childItem),
               )
           ), sectionOwner);
           this.AppendReadonlyCompactSection(
-              'Manual Property Promotion',
+              this.t('manualPropertyPromotion'),
               manualPromotedProperties,
               inspectorSections,
               (propertyRef) => this.createReadonlyCompactInspectorItem(
@@ -26896,21 +27639,21 @@
       }
   
       renderLibraryTextItemInspectorSections(item, inspectorSections) {
-          this.AppendReadonlyBlock('Text', item?.text ?? '', inspectorSections);
-          this.AppendJsonTreeField('Formatting', item?.format ?? TextItem.createDefaultFormat(), inspectorSections);
+          this.AppendReadonlyBlock(this.t('text'), item?.text ?? '', inspectorSections);
+          this.AppendJsonTreeField(this.t('formatting'), item?.format ?? TextItem.createDefaultFormat(), inspectorSections);
       }
   
       renderLibraryItemInspectorSelection(library, libraryEntry, item) {
           const itemTypeLabel = this.getLibraryInspectorItemTypeLabel(item);
-          const { content: itemContent, inspectorCard, inspectorSections } = this.createInspectorLayout(`Saved ${itemTypeLabel}`);
+          const { content: itemContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('savedItem', { type: itemTypeLabel }));
           const sectionOwner = this.createLibraryInspectorSectionOwner(library, libraryEntry, item);
           const nameInput = this.createReadonlyInspectorInput(item?.name ?? libraryEntry?.name ?? '');
   
-          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle('Name'));
+          inspectorCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('name')));
           inspectorCard.body.appendChild(nameInput);
-          this.AppendReadonlyField('Type', itemTypeLabel, inspectorSections);
-          this.AppendReadonlyField('Library', library?.name ?? '', inspectorSections);
-          this.AppendReadonlyField('Entry', libraryEntry?.name ?? '', inspectorSections);
+          this.AppendReadonlyField(this.t('type'), itemTypeLabel, inspectorSections);
+          this.AppendReadonlyField(this.t('libraryLabel'), library?.name ?? '', inspectorSections);
+          this.AppendReadonlyField(this.t('entry'), libraryEntry?.name ?? '', inspectorSections);
   
           if (item?.type === 'component') {
               this.renderLibraryComponentInspectorSections(item, inspectorSections, sectionOwner);
@@ -26920,10 +27663,10 @@
               this.renderLibraryTextItemInspectorSections(item, inspectorSections);
           }
   
-          this.AppendJsonTreeField('Saved Snapshot', item, inspectorSections);
+          this.AppendJsonTreeField(this.t('savedSnapshot'), item, inspectorSections);
           inspectorCard.body.appendChild(inspectorSections);
           itemContent.appendChild(inspectorCard.element);
-          this.root.replaceChildren(itemContent);
+          this.replaceRootContent(itemContent);
       }
   
       SetContainer(container)
@@ -26940,7 +27683,7 @@
   
           this.selectedComponent = container;
           this.syncModeButton();
-          const { content: containerContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Container');
+          const { content: containerContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('container'));
           const containerName = this.panelHelper.createInput(container.name, (value) => {
               container.setName(value);
           });
@@ -26948,16 +27691,16 @@
   
           inspectorCard.body.appendChild(containerName.element);
           this.AppendManualPromotedPropertiesSection(container, inspectorCard.body);
-          this.AppendSection(container.getChannels().length, 'Channels', inspectorSections, (body) => {
+          this.AppendSection(container.getChannels().length, this.t('channels'), inspectorSections, (body) => {
               this.AddPromotedChannels(container, body);
           });
-          this.AppendSection(container.getProperties().length, 'Properties', inspectorSections, (body) => {
+          this.AppendSection(container.getProperties().length, this.t('properties'), inspectorSections, (body) => {
               this.AddPromotedProperties(container, body);
           });
           inspectorCard.body.appendChild(inspectorSections);
           containerContent.appendChild(inspectorCard.element);
   
-          this.root.replaceChildren(containerContent);
+          this.replaceRootContent(containerContent);
       }
   
       SetComponent(component) {
@@ -26965,33 +27708,29 @@
           this.selectedComponent = component;
           this.syncModeButton();
   
-          const addProperty = this.panelHelper.makeButton('', 'Add Property', () => {
+          const addProperty = this.createComponentQuickActionButton('property', this.t('addProperty'), () => {
               if (this.selectedComponent) {
-                  this.selectedComponent.addProperty('New Property');
+                  this.selectedComponent.addProperty(this.t('newPropertyName'));
               }
           });
-          addProperty.classList.add('dp-btn-flat');
   
-          const addChannel = this.panelHelper.makeButton('', 'Add Channel', () => {
+          const addChannel = this.createComponentQuickActionButton('channel', this.t('addChannel'), () => {
               if (this.selectedComponent) {
-                  this.selectedComponent.addChannel('New Channel');
+                  this.selectedComponent.addChannel(this.t('newChannelName'));
               }
           });
-          addChannel.classList.add('dp-btn-flat');
   
-          const addTimer = this.panelHelper.makeButton('', 'Add Timer', () => {
+          const addTimer = this.createComponentQuickActionButton('timer', this.t('addTimer'), () => {
               if (this.selectedComponent) {
-                  this.selectedComponent.addTimer('New Timer');
+                  this.selectedComponent.addTimer(this.t('newTimerName'));
               }
           });
-          addTimer.classList.add('dp-btn-flat');
   
-          const addTrigger = this.panelHelper.makeButton('', 'Add Trigger', () => {
+          const addTrigger = this.createComponentQuickActionButton('trigger', this.t('addTrigger'), () => {
               if (this.selectedComponent) {
-                  this.selectedComponent.addTrigger('New Trigger');
+                  this.selectedComponent.addTrigger(this.t('newTriggerName'));
               }
           });
-          addTrigger.classList.add('dp-btn-flat');
   
           ['property', 'channel', 'timer', 'trigger', 'deleteconnectable', 'deletetrigger', 'deletetimer'].forEach(field => {
               component.observable.addFieldListener(field, () => {
@@ -27004,16 +27743,17 @@
           }, this.listenerKey);
   
           if (this.mode === ComponentPanel.modeView) {
-              this.root.replaceChildren(this.renderComponentViewMode(component));
+              this.replaceRootContent(this.renderComponentViewMode(component));
               return;
           }
   
-          this.root.replaceChildren(this.renderComponentDesignMode(component, {
+          this.replaceRootContent(this.renderComponentDesignMode(component, {
               addProperty,
               addChannel,
               addTimer,
               addTrigger,
           }));
+          this.observeComponentQuickActions(this.root.querySelector('.dp-component-quick-actions'));
       }
   
       SetTextItem(textItem) {
@@ -27025,7 +27765,7 @@
               this.ClearSelection();
           }, this.listenerKey));
   
-          this.root.replaceChildren(this.renderTextItemInspector(textItem));
+          this.replaceRootContent(this.renderTextItemInspector(textItem));
       }
   
       SetPacket(packet) {
@@ -27037,7 +27777,7 @@
               this.ClearSelection();
           }, this.listenerKey));
   
-          const { content: packetContent, inspectorCard, inspectorSections } = this.createInspectorLayout('Packet');
+          const { content: packetContent, inspectorCard, inspectorSections } = this.createInspectorLayout(this.t('packet'));
   
           this.AppendPacketPayload(packet.payload, inspectorSections);
   
@@ -27054,11 +27794,11 @@
               ? packet.connection?.connectable2?.name
               : packet.connection?.connectable1?.name;
   
-          this.AppendReadonlyField('Source', this.FormatEndpoint(sourceName, sourcePort), inspectorSections);
-          this.AppendReadonlyField('Target', this.FormatEndpoint(targetName, targetPort), inspectorSections);
+          this.AppendReadonlyField(this.t('source'), this.FormatEndpoint(sourceName, sourcePort), inspectorSections);
+          this.AppendReadonlyField(this.t('target'), this.FormatEndpoint(targetName, targetPort), inspectorSections);
           inspectorCard.body.appendChild(inspectorSections);
           packetContent.appendChild(inspectorCard.element);
-          this.root.replaceChildren(packetContent);
+          this.replaceRootContent(packetContent);
       }
   
       ClearSelection() {
@@ -27116,8 +27856,8 @@
           toggle.innerText = '›';
           toggle.classList.toggle('is-expanded', isExpanded);
           toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-          toggle.setAttribute('aria-label', `${isExpanded ? 'Collapse' : 'Expand'} ${title}`);
-          toggle.title = `${isExpanded ? 'Collapse' : 'Expand'} ${title}`;
+          toggle.setAttribute('aria-label', this.t(isExpanded ? 'collapse' : 'expand', { title }));
+          toggle.title = this.t(isExpanded ? 'collapse' : 'expand', { title });
           const applyToggleState = () => {
               const nextCollapsed = this.toggleInspectorSectionCollapsed(sectionOwner, title);
               const nextExpanded = nextCollapsed !== true;
@@ -27125,8 +27865,8 @@
               content.hidden = nextCollapsed;
               toggle.classList.toggle('is-expanded', nextExpanded);
               toggle.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
-              toggle.setAttribute('aria-label', `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`);
-              toggle.title = `${nextExpanded ? 'Collapse' : 'Expand'} ${title}`;
+              toggle.setAttribute('aria-label', this.t(nextExpanded ? 'collapse' : 'expand', { title }));
+              toggle.title = this.t(nextExpanded ? 'collapse' : 'expand', { title });
           };
           toggle.addEventListener('click', (event) => {
               event.preventDefault();
@@ -27150,18 +27890,19 @@
       }
   
       renderEmptyState() {
+          this.disconnectComponentQuickActionLayoutObserver();
           const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-          emptyState.innerText = 'Select a text item, component, container, packet, or library to inspect it.';
+          emptyState.innerText = this.t('emptySelection');
           this.root.replaceChildren(emptyState);
       }
   
       AppendPacketPayload(payload, parentElement) {
           const jsonPayload = this.getInspectableJsonPayload(payload);
           if (jsonPayload) {
-              this.AppendJsonTreeField('Payload', jsonPayload, parentElement);
+              this.AppendJsonTreeField(this.t('payload'), jsonPayload, parentElement);
               return;
           }
-          this.AppendReadonlyBlock('Payload', this.formatPayloadText(payload), parentElement);
+          this.AppendReadonlyBlock(this.t('payload'), this.formatPayloadText(payload), parentElement);
       }
   
       AppendReadonlyField(title, value, parentElement) {
@@ -27211,10 +27952,10 @@
               ? options.maxDepth
               : ComponentPanel.maxJsonTreeDepth;
           if (seen.has(value)) {
-              return this.createJsonMessageRow(label, '[Circular]');
+              return this.createJsonMessageRow(label, this.t('jsonCircular'));
           }
           if (depth >= maxDepth) {
-              return this.createJsonMessageRow(label, '[Max depth reached]');
+              return this.createJsonMessageRow(label, this.t('jsonMaxDepth'));
           }
           seen.add(value);
   
@@ -27242,7 +27983,7 @@
               : Object.keys(value).map((key) => [key, value[key]]);
   
           if (entries.length === 0) {
-              children.appendChild(this.createJsonMessageRow(null, '(empty)'));
+              children.appendChild(this.createJsonMessageRow(null, this.t('jsonEmpty')));
           } else {
               entries.forEach(([childLabel, childValue]) => {
                   children.appendChild(this.buildJsonTreeNode(childLabel, childValue, {
@@ -27352,18 +28093,24 @@
       }
   
       getJsonCollectionTypeName(value) {
-          if (Array.isArray(value)) return 'Array';
+          if (Array.isArray(value)) return this.t('jsonArray');
           const constructorName = value?.constructor?.name;
           if (constructorName && constructorName !== 'Object') return constructorName;
-          return 'Object';
+          return this.t('jsonObject');
       }
   
       getJsonCollectionMetaText(value) {
           if (Array.isArray(value)) {
-              return value.length === 1 ? '(1 item)' : `(${value.length} items)`;
+              return this.t('jsonItemCount', {
+                  count: value.length,
+                  suffix: value.length === 1 ? '' : 's',
+              });
           }
           const keyCount = Object.keys(value).length;
-          return keyCount === 1 ? '(1 key)' : `(${keyCount} keys)`;
+          return this.t('jsonKeyCount', {
+              count: keyCount,
+              suffix: keyCount === 1 ? '' : 's',
+          });
       }
   
       getJsonValueType(value) {
@@ -27382,12 +28129,12 @@
       }
   
       getPropertyRepresentationLabel(representation) {
-          if (representation === ControlPanelModel.propertyRepresentationDropdown) return 'Selector';
-          if (representation === ControlPanelModel.propertyRepresentationBooleanToggle) return 'On / Off';
-          if (representation === ControlPanelModel.propertyRepresentationNumber) return 'Number Only';
-          if (representation === ControlPanelModel.propertyRepresentationSlider) return 'Value Slider';
-          if (representation === ControlPanelModel.propertyRepresentationProgress) return 'Progress';
-          return 'Free Text';
+          if (representation === ControlPanelModel.propertyRepresentationDropdown) return this.t('selector');
+          if (representation === ControlPanelModel.propertyRepresentationBooleanToggle) return this.t('onOff');
+          if (representation === ControlPanelModel.propertyRepresentationNumber) return this.t('numberOnly');
+          if (representation === ControlPanelModel.propertyRepresentationSlider) return this.t('valueSlider');
+          if (representation === ControlPanelModel.propertyRepresentationProgress) return this.t('progress');
+          return this.t('freeText');
       }
   
       getPropertyDropdownOptions(property) {
@@ -27542,7 +28289,7 @@
                               && optionValue === normalizedValue
                               && !configuredOptions.includes(normalizedValue)
                           )
-                              ? (optionValue === '' ? 'Select value' : `${optionValue} (current)`)
+                              ? (optionValue === '' ? this.t('selectValue') : this.t('currentValue', { value: optionValue }))
                               : optionValue;
                           selectElement.appendChild(option);
                       });
@@ -27553,12 +28300,12 @@
               const toggleSwitch = this.panelHelper.createToggleSwitch(false, (nextState) => {
                   property.setValue(ControlPanelModel.buildBooleanToggleWriteValue(property.getValue(), nextState));
               }, {
-                  ariaLabel: `Toggle ${property.name}`,
+                  ariaLabel: this.t('toggleProperty', { name: property.name }),
               });
               controlElement.appendChild(toggleSwitch.element);
               syncName = () => {
                   nameInput.setValueFunc(property.name);
-                  toggleSwitch.element.setAttribute('aria-label', `Toggle ${property.name}`);
+                  toggleSwitch.element.setAttribute('aria-label', this.t('toggleProperty', { name: property.name }));
               };
               syncValue = () => {
                   toggleSwitch.setChecked(this.getBooleanState(property.getValue?.()));
@@ -27603,7 +28350,7 @@
                   }
                   sliderValueElement.innerText = Number.isFinite(numericValue)
                       ? String(numericValue)
-                      : 'Not a number';
+                      : this.t('notANumber');
               };
           } else if (representation === ControlPanelModel.propertyRepresentationProgress) {
               const detailElement = this.panelHelper.createElement('div', 'dp-inspector-compact-detail');
@@ -27628,7 +28375,7 @@
                   const progressFraction = this.getProgressFraction(property.getValue?.());
                   progressFill.style.width = `${Math.round((progressFraction ?? 0) * 100)}%`;
                   progressValueElement.innerText = progressFraction == null
-                      ? 'Not a 0-1 value'
+                      ? this.t('notAZeroOneValue')
                       : `${Math.round(progressFraction * 100)}%`;
               };
           } else {
@@ -27673,7 +28420,7 @@
               });
               this.markInspectorElementFocusTarget(nameInput.element, trigger, trigger.id);
               labelElement.replaceChildren(nameInput.element);
-              const triggerButton = this.panelHelper.makeButton('secondary', 'Trigger', () => {
+              const triggerButton = this.panelHelper.makeButton('secondary', this.t('trigger'), () => {
                   trigger.trigger?.();
               });
               triggerButton.classList.add('dp-control-trigger-btn');
@@ -27721,17 +28468,17 @@
           const representationField = this.panelHelper.createElement('div', 'dp-control-design-field dp-inspector-property-representation-field');
           const representationSelect = document.createElement('select');
           const representationOptions = [
-              [ControlPanelModel.propertyRepresentationDropdown, 'Selector'],
-              [ControlPanelModel.propertyRepresentationBooleanToggle, 'On / Off'],
-              [ControlPanelModel.propertyRepresentationText, 'Free Text'],
-              [ControlPanelModel.propertyRepresentationNumber, 'Number Only'],
-              [ControlPanelModel.propertyRepresentationSlider, 'Value Slider'],
+              [ControlPanelModel.propertyRepresentationDropdown, this.t('selector')],
+              [ControlPanelModel.propertyRepresentationBooleanToggle, this.t('onOff')],
+              [ControlPanelModel.propertyRepresentationText, this.t('freeText')],
+              [ControlPanelModel.propertyRepresentationNumber, this.t('numberOnly')],
+              [ControlPanelModel.propertyRepresentationSlider, this.t('valueSlider')],
           ];
           if (displayConfig.representation === ControlPanelModel.propertyRepresentationProgress) {
-              representationOptions.push([ControlPanelModel.propertyRepresentationProgress, 'Progress']);
+              representationOptions.push([ControlPanelModel.propertyRepresentationProgress, this.t('progress')]);
           }
           representationSelect.className = 'dp-input';
-          representationSelect.setAttribute('aria-label', 'Property view design');
+          representationSelect.setAttribute('aria-label', this.t('propertyViewDesign'));
           representationOptions.forEach(([value, label]) => {
               const option = document.createElement('option');
               option.value = value;
@@ -27752,9 +28499,9 @@
               const optionsLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
               const optionsTextarea = document.createElement('textarea');
               optionsField.classList.add('is-wide');
-              optionsLabel.innerText = 'Options';
+              optionsLabel.innerText = this.t('options');
               optionsTextarea.className = 'dp-load-textarea dp-control-design-textarea';
-              optionsTextarea.placeholder = 'One value per line';
+              optionsTextarea.placeholder = this.t('oneValuePerLine');
               optionsTextarea.value = displayConfig.optionsText ?? '';
               optionsTextarea.addEventListener('change', () => {
                   this.workspace.updatePropertyDisplayConfig(property, {
@@ -27768,9 +28515,9 @@
   
           if (displayConfig.representation === ControlPanelModel.propertyRepresentationSlider) {
               [
-                  ['Minimum', displayConfig.minValue, 'minValue'],
-                  ['Maximum', displayConfig.maxValue, 'maxValue'],
-                  ['Step', displayConfig.stepValue, 'stepValue'],
+                  [this.t('minimum'), displayConfig.minValue, 'minValue'],
+                  [this.t('maximum'), displayConfig.maxValue, 'maxValue'],
+                  [this.t('step'), displayConfig.stepValue, 'stepValue'],
               ].forEach(([fieldLabel, fieldValue, fieldKey]) => {
                   const numberField = this.panelHelper.createElement('div', 'dp-control-design-field');
                   const numberFieldLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
@@ -27804,7 +28551,7 @@
   
       AppendManualPromotedPropertiesSection(container, parentElement) {
           const section = this.panelHelper.createElement('div', 'dp-inspector-section');
-          section.appendChild(this.panelHelper.createSectionTitle('Manual Property Promotion'));
+          section.appendChild(this.panelHelper.createSectionTitle(this.t('manualPropertyPromotion')));
   
           const addRow = this.panelHelper.createElement('div', 'dp-form-row');
           const inputWrapper = this.panelHelper.createElement('div', 'dp-form-main');
@@ -27812,14 +28559,14 @@
           const suggestionsId = `manual-promoted-properties-${container.id}`;
           const propertyPaths = container.getPromotablePropertyPaths();
           const input = this.panelHelper.createInput('', () => {}, {
-              placeholder: 'componentname.propertyname',
+              placeholder: this.t('promotablePlaceholder'),
               list: suggestionsId,
           });
           input.element.autocomplete = 'off';
           input.element.spellcheck = false;
           input.element.setAttribute('aria-autocomplete', 'list');
-          input.element.setAttribute('aria-label', 'Search promotable properties');
-          const addButton = this.panelHelper.makeButton('light', 'Add', () => {
+          input.element.setAttribute('aria-label', this.t('searchPromotableProperties'));
+          const addButton = this.panelHelper.makeButton('light', this.t('add'), () => {
               const added = container.addManualPromotedPropertyPath(input.element.value);
               if (added) input.setValueFunc('');
           });
@@ -27975,6 +28722,51 @@
   <script>
   class CodePanel {
   
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelTitle: 'Code',
+              panelEyebrow: 'Component',
+              emptySelectComponent: 'Select a component to edit its code.',
+              emptyContainer: '"{name}" is a container. Code is only available for components.',
+              emptyTextItem: '"{name}" is a text item. Code is only available for components.',
+              sharedSetupTitle: 'Shared Setup',
+              sharedSetupSubtitle: 'Helpers and shared state',
+              sharedSetupDescription: 'Shared code runs once when the worker starts. Use it for helpers, constants, and shared state.',
+              handlerDescription: '{kind} handler snippet. This code is isolated and compiled into the component\'s generated event switch.',
+              contextHintEmpty: 'Type ctx. for component-aware completions.',
+              contextHint: 'Type ctx. for component-aware completions. Properties: {properties}. Channels: {channels}.{targetsText}',
+              contextTargets: ' Targets: {count}.',
+              none: 'none',
+              filterHandlers: '⌕ Filter handlers',
+              noHandlers: 'No handlers match the current filter.',
+              argsLabel: 'Arguments: {args}',
+              runsOnce: 'Runs once at worker startup.',
+              completionsTitle: 'ctx completions',
+              footerNote: 'Type ctx. for completions. Tab/Enter accept suggestions; otherwise Tab indents, Shift+Tab outdents, and Enter keeps indentation.',
+          }),
+          de: Object.freeze({
+              panelTitle: 'Code',
+              panelEyebrow: 'Komponente',
+              emptySelectComponent: 'Waehle eine Komponente aus, um ihren Code zu bearbeiten.',
+              emptyContainer: '"{name}" ist ein Container. Code ist nur fuer Komponenten verfuegbar.',
+              emptyTextItem: '"{name}" ist ein Textelement. Code ist nur fuer Komponenten verfuegbar.',
+              sharedSetupTitle: 'Gemeinsames Setup',
+              sharedSetupSubtitle: 'Hilfsfunktionen und gemeinsamer Status',
+              sharedSetupDescription: 'Gemeinsamer Code wird einmal beim Start des Workers ausgefuehrt. Nutze ihn fuer Hilfsfunktionen, Konstanten und gemeinsamen Status.',
+              handlerDescription: '{kind}-Handler. Dieser Code ist isoliert und wird in den erzeugten Event-Switch der Komponente kompiliert.',
+              contextHintEmpty: 'Tippe ctx. fuer komponentenbezogene Vervollstaendigungen.',
+              contextHint: 'Tippe ctx. fuer komponentenbezogene Vervollstaendigungen. Eigenschaften: {properties}. Kanaele: {channels}.{targetsText}',
+              contextTargets: ' Ziele: {count}.',
+              none: 'keine',
+              filterHandlers: '⌕ Handler filtern',
+              noHandlers: 'Keine Handler passen zum aktuellen Filter.',
+              argsLabel: 'Argumente: {args}',
+              runsOnce: 'Wird beim Start des Workers einmal ausgefuehrt.',
+              completionsTitle: 'ctx-Vervollstaendigungen',
+              footerNote: 'Tippe ctx. fuer Vervollstaendigungen. Tab/Enter uebernehmen Vorschlaege; sonst rueckt Tab ein, Shift+Tab rueckt aus und Enter behaelt die Einrueckung bei.',
+          }),
+      });
+  
       listenerKey = 'codePanel';
       static indentText = '  ';
       static javascriptKeywords = new Set([
@@ -27997,8 +28789,8 @@
           this.selectedEditorCompletionIndex = -1;
           this.editorCompletionRequest = null;
           this.panel = new Panel(x, y, panelHelper, {
-              title: 'Code',
-              eyebrow: 'Component',
+              title: this.t('panelTitle'),
+              eyebrow: this.t('panelEyebrow'),
               variant: 'code',
               dockIconText: ButtonSymbols.code,
               persistenceId: 'workspace:code',
@@ -28014,7 +28806,7 @@
           this.root.style.flex = '1 1 auto';
           this.root.style.minHeight = '0';
           this.root.style.overflow = 'hidden';
-          this.renderEmptyState('Select a component to edit its code.');
+          this.renderEmptyState(this.t('emptySelectComponent'));
   
           this.workspace.observable.addFieldListener('selected', (item) => {
               if (item instanceof Component) {
@@ -28022,17 +28814,39 @@
                   return;
               }
               if (item instanceof Container) {
-                  this.clearSelection(`"${item.name}" is a container. Code is only available for components.`);
+                  this.clearSelection(this.t('emptyContainer', { name: item.name }));
                   return;
               }
               if (item instanceof TextItem) {
-                  this.clearSelection(`"${item.name}" is a text item. Code is only available for components.`);
+                  this.clearSelection(this.t('emptyTextItem', { name: item.name }));
                   return;
               }
-              this.clearSelection('Select a component to edit its code.');
+              this.clearSelection(this.t('emptySelectComponent'));
           });
   
           this.panel.dockTo('right');
+      }
+  
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = CodePanel.translations[language]?.[key]
+              ?? CodePanel.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setTitle?.(this.t('panelTitle'));
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+          if (this.selectedComponent) {
+              this.renderComponentEditor();
+              return;
+          }
+          this.renderEmptyState(this.t('emptySelectComponent'));
       }
   
       setComponent(component) {
@@ -28040,7 +28854,7 @@
           this.selectedComponent = component;
   
           component.observable.addFieldListener('delete', () => {
-              this.clearSelection('Select a component to edit its code.');
+              this.clearSelection(this.t('emptySelectComponent'));
           }, this.listenerKey);
           component.observable.addFieldListener('name', () => {
               this.renderComponentEditor();
@@ -28960,9 +29774,9 @@
               {
                   id: 'shared',
                   type: 'shared',
-                  title: 'Shared Setup',
-                  subtitle: 'Helpers and shared state',
-                  description: 'Shared code runs once when the worker starts. Use it for helpers, constants, and shared state.',
+                  title: this.t('sharedSetupTitle'),
+                  subtitle: this.t('sharedSetupSubtitle'),
+                  description: this.t('sharedSetupDescription'),
                   args: [],
                   getValue: () => component.getSharedCode(),
                   setValue: (value) => component.setSharedCode(value),
@@ -28982,7 +29796,7 @@
               camelCaseName: item.camelCaseName,
               title: item.name,
               subtitle: kind,
-              description: `${kind} handler snippet. This code is isolated and compiled into the component's generated event switch.`,
+              description: this.t('handlerDescription', { kind }),
               args: args,
               getValue: () => this.selectedComponent?.getScopedCode(section, item.name) ?? '',
               setValue: (value) => this.selectedComponent?.setScopedCode(section, item.name, value),
@@ -29008,7 +29822,7 @@
       }
   
       getContextHintText() {
-          if (!this.selectedComponent) return 'Type ctx. for component-aware completions.';
+          if (!this.selectedComponent) return this.t('contextHintEmpty');
   
           const propertyNames = this.selectedComponent.getProperties().map((property) => property.name);
           const channelNames = this.selectedComponent.getChannels().map((channel) => channel.name);
@@ -29021,10 +29835,14 @@
               }, 0)
           ), 0);
   
-          const propertiesText = CodePanel.summarizeContextNames(propertyNames, 'none');
-          const channelsText = CodePanel.summarizeContextNames(channelNames, 'none');
-          const targetsText = targetCount > 0 ? ` Targets: ${targetCount}.` : '';
-          return `Type ctx. for component-aware completions. Properties: ${propertiesText}. Channels: ${channelsText}.${targetsText}`;
+          const propertiesText = CodePanel.summarizeContextNames(propertyNames, this.t('none'));
+          const channelsText = CodePanel.summarizeContextNames(channelNames, this.t('none'));
+          const targetsText = targetCount > 0 ? this.t('contextTargets', { count: targetCount }) : '';
+          return this.t('contextHint', {
+              properties: propertiesText,
+              channels: channelsText,
+              targetsText,
+          });
       }
   
       captureRenderState() {
@@ -29331,7 +30149,7 @@
   
       renderComponentEditor() {
           if (!this.selectedComponent) {
-              this.renderEmptyState('Select a component to edit its code.');
+              this.renderEmptyState(this.t('emptySelectComponent'));
               return;
           }
   
@@ -29354,7 +30172,7 @@
               this.filterQuery = value;
               this.renderComponentEditor();
           }, {
-              placeholder: '⌕ Filter handlers',
+              placeholder: this.t('filterHandlers'),
           });
           filterInput.element.classList.add('dp-code-filter');
           sidebar.appendChild(filterInput.element);
@@ -29362,7 +30180,7 @@
           const list = this.panelHelper.createElement('div', 'dp-code-list');
           if (!filteredEntries.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-code-empty');
-              emptyState.innerText = 'No handlers match the current filter.';
+              emptyState.innerText = this.t('noHandlers');
               list.appendChild(emptyState);
           }
           filteredEntries.forEach((entry) => {
@@ -29388,7 +30206,9 @@
           const headerTitle = this.panelHelper.createElement('div', 'dp-code-entry-heading');
           headerTitle.innerText = activeEntry.title;
           const headerMeta = this.panelHelper.createElement('div', 'dp-code-entry-description');
-          const argsText = activeEntry.args.length ? `Arguments: ${activeEntry.args.join(', ')}` : 'Runs once at worker startup.';
+          const argsText = activeEntry.args.length
+              ? this.t('argsLabel', { args: activeEntry.args.join(', ') })
+              : this.t('runsOnce');
           headerMeta.innerText = `${activeEntry.description} ${argsText}`;
           const headerContext = this.panelHelper.createElement('div', 'dp-code-entry-context');
           headerContext.innerText = this.getContextHintText();
@@ -29437,13 +30257,13 @@
           const completions = this.panelHelper.createElement('div', 'dp-code-completions');
           const completionsTitle = this.panelHelper.createElement('div', 'dp-code-completions-title');
           const completionsList = this.panelHelper.createElement('div', 'dp-code-completions-list');
-          completionsTitle.innerText = 'ctx completions';
+          completionsTitle.innerText = this.t('completionsTitle');
           completions.appendChild(completionsTitle);
           completions.appendChild(completionsList);
   
           const footer = this.panelHelper.createElement('div', 'dp-code-footer');
           const footerNote = this.panelHelper.createElement('div', 'dp-code-footer-note');
-          footerNote.innerText = 'Type ctx. for completions. Tab/Enter accept suggestions; otherwise Tab indents, Shift+Tab outdents, and Enter keeps indentation.';
+          footerNote.innerText = this.t('footerNote');
           const footerStatus = this.panelHelper.createElement('div', 'dp-code-footer-status');
           footer.appendChild(footerNote);
           footer.appendChild(footerStatus);
@@ -29520,6 +30340,41 @@
   <script>
   class LoggerPanel {
   
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelTitle: 'Log',
+              panelEyebrow: 'Workspace',
+              sources: 'Sources',
+              searchPlaceholder: '⌕ Search components or containers',
+              all: 'All',
+              none: 'None',
+              purgeLogs: 'Purge Logs',
+              emptyLogs: 'Component code logs will appear here.',
+              emptySources: 'No matching sources.',
+              emptyFilteredLogs: 'No logs match the current filters.',
+              sourceLabel: 'Log',
+              typeComponent: 'Component',
+              typeContainer: 'Container',
+              deleted: 'Deleted',
+          }),
+          de: Object.freeze({
+              panelTitle: 'Protokoll',
+              panelEyebrow: 'Workspace',
+              sources: 'Quellen',
+              searchPlaceholder: '⌕ Komponenten oder Container durchsuchen',
+              all: 'Alle',
+              none: 'Keine',
+              purgeLogs: 'Logs leeren',
+              emptyLogs: 'Logs aus dem Komponentencode erscheinen hier.',
+              emptySources: 'Keine passenden Quellen.',
+              emptyFilteredLogs: 'Keine Logs passen zu den aktuellen Filtern.',
+              sourceLabel: 'Protokoll',
+              typeComponent: 'Komponente',
+              typeContainer: 'Container',
+              deleted: 'Geloescht',
+          }),
+      });
+  
       listenerKey = 'logger-panel';
   
       constructor(x, y, panelHelper) {
@@ -29528,8 +30383,8 @@
           this.filterState = new Map();
           this.filterSearch = '';
           this.panel = new Panel(x, y, panelHelper, {
-              title: 'Log',
-              eyebrow: 'Workspace',
+              title: this.t('panelTitle'),
+              eyebrow: this.t('panelEyebrow'),
               variant: 'logger',
               dockIconText: ButtonSymbols.log,
               persistenceId: 'workspace:log',
@@ -29558,6 +30413,40 @@
           this.root.appendChild(this.filterColumn);
           this.root.appendChild(this.logColumn);
           this.panel.dockTo('bottom');
+      }
+  
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = LoggerPanel.translations[language]?.[key]
+              ?? LoggerPanel.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setTitle?.(this.t('panelTitle'));
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+          if (this.filterTitleElement) {
+              this.filterTitleElement.innerText = this.t('sources');
+          }
+          if (this.filterSearchInput) {
+              this.filterSearchInput.placeholder = this.t('searchPlaceholder');
+          }
+          if (this.enableAllButton) {
+              this.enableAllButton.innerText = this.t('all');
+          }
+          if (this.disableAllButton) {
+              this.disableAllButton.innerText = this.t('none');
+          }
+          if (this.clearButton) {
+              this.clearButton.innerText = this.t('purgeLogs');
+          }
+          this.renderFilterOptions();
+          this.renderEntries();
       }
   
       setWorkspace(workspace) {
@@ -29610,12 +30499,13 @@
       buildFilterUi() {
           const header = this.panelHelper.createElement('div', 'dp-log-filter-header');
           const title = this.panelHelper.createElement('div', 'dp-section-title');
-          title.innerText = 'Sources';
+          title.innerText = this.t('sources');
+          this.filterTitleElement = title;
           header.appendChild(title);
   
           const search = this.panelHelper.createElement('input', 'dp-input');
           search.type = 'text';
-          search.placeholder = '⌕ Search components or containers';
+          search.placeholder = this.t('searchPlaceholder');
           search.addEventListener('input', () => {
               this.filterSearch = search.value.trim().toLowerCase();
               this.renderFilterOptions();
@@ -29624,20 +30514,22 @@
           header.appendChild(search);
   
           const actions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          const enableAllButton = this.panelHelper.makeButton('light', 'All', () => {
+          const enableAllButton = this.panelHelper.makeButton('light', this.t('all'), () => {
               this.getFilterItems().forEach((item) => {
                   this.filterState.set(item.id, true);
               });
               this.renderFilterOptions();
               this.renderEntries();
           });
-          const disableAllButton = this.panelHelper.makeButton('light', 'None', () => {
+          const disableAllButton = this.panelHelper.makeButton('light', this.t('none'), () => {
               this.getFilterItems().forEach((item) => {
                   this.filterState.set(item.id, false);
               });
               this.renderFilterOptions();
               this.renderEntries();
           });
+          this.enableAllButton = enableAllButton;
+          this.disableAllButton = disableAllButton;
           actions.appendChild(enableAllButton);
           actions.appendChild(disableAllButton);
           header.appendChild(actions);
@@ -29649,14 +30541,14 @@
   
       buildLogUi() {
           const actions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          this.clearButton = this.panelHelper.makeButton('light', 'Purge Logs', () => {
+          this.clearButton = this.panelHelper.makeButton('light', this.t('purgeLogs'), () => {
               this.clear();
           });
           actions.appendChild(this.clearButton);
   
           this.logElement = this.panelHelper.createElement('div', 'dp-log-window');
           this.emptyElement = this.panelHelper.createElement('div', 'dp-empty-state');
-          this.emptyElement.innerText = 'Component code logs will appear here.';
+          this.emptyElement.innerText = this.t('emptyLogs');
           this.logElement.appendChild(this.emptyElement);
   
           this.logColumn.appendChild(actions);
@@ -29700,7 +30592,7 @@
               .map((item) => ({
                   id: item.id,
                   name: item.name,
-                  type: item instanceof Component ? 'Component' : 'Container',
+                  type: item instanceof Component ? this.t('typeComponent') : this.t('typeContainer'),
                   isDeleted: item.isSoftDeleted?.() === true,
               }))
               .toSorted((item1, item2) => item1.name.localeCompare(item2.name) || item1.id - item2.id);
@@ -29737,7 +30629,7 @@
   
           if (!items.length) {
               const empty = this.panelHelper.createElement('div', 'dp-empty-state');
-              empty.innerText = 'No matching sources.';
+              empty.innerText = this.t('emptySources');
               this.filterOptionsElement.appendChild(empty);
               return;
           }
@@ -29756,7 +30648,7 @@
               const name = this.panelHelper.createElement('div', 'dp-log-filter-option-name');
               name.innerText = item.name;
               const meta = this.panelHelper.createElement('div', 'dp-log-filter-option-meta');
-              meta.innerText = item.isDeleted ? `${item.type} · Deleted` : item.type;
+              meta.innerText = item.isDeleted ? `${item.type} · ${this.t('deleted')}` : item.type;
   
               body.appendChild(name);
               body.appendChild(meta);
@@ -29773,8 +30665,8 @@
           if (!visibleEntries.length) {
               this.emptyElement = this.panelHelper.createElement('div', 'dp-empty-state');
               this.emptyElement.innerText = this.entries.length
-                  ? 'No logs match the current filters.'
-                  : 'Component code logs will appear here.';
+                  ? this.t('emptyFilteredLogs')
+                  : this.t('emptyLogs');
               this.logElement.appendChild(this.emptyElement);
               return;
           }
@@ -29786,7 +30678,7 @@
               const time = this.panelHelper.createElement('span', 'dp-log-line-time');
               time.innerText = entry.timestamp.toLocaleTimeString();
               const source = this.panelHelper.createElement('span', 'dp-log-line-source');
-              source.innerText = entry.metadata?.sourceLabel ?? 'Log';
+              source.innerText = entry.metadata?.sourceLabel ?? this.t('sourceLabel');
               meta.appendChild(time);
               meta.appendChild(source);
   
@@ -30038,7 +30930,7 @@
           this.handleDockIconPickerDocumentMouseDown = this.handleDockIconPickerDocumentMouseDown.bind(this);
           this.panel = new Panel(x, y, panelHelper, {
               title: controlPanel.name,
-              eyebrow: 'Control Panel',
+              eyebrow: this.t('panelEyebrow'),
               variant: 'control-panel',
               dockIconText: this.getResolvedDockIconText(),
               persistenceId: `control-panel:${controlPanel.id}`,
@@ -30068,6 +30960,135 @@
               this.destroy();
           }, this.listenerKey);
   
+          this.syncModeButton();
+          this.render();
+      }
+  
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelEyebrow: 'Control Panel',
+              modeReturnView: 'Return to view mode',
+              modeEnterDesign: 'Enter design mode',
+              emptyView: 'Switch to design mode to add properties, timers, and triggers.',
+              trigger: 'Trigger',
+              panel: 'Panel',
+              name: 'Name',
+              dockSymbol: 'Dock Symbol',
+              defaultSymbol: 'Default {icon}',
+              searchEmojiSymbols: '⌕ Search emoji and symbols',
+              dockSymbolAria: 'Dock symbol',
+              searchSymbols: 'Search symbols',
+              dockSymbolPicker: 'Dock symbol picker',
+              searchDockSymbols: 'Search dock symbols',
+              entryPlaceholder: 'component.element',
+              add: 'Add',
+              availableElements: 'Available control panel elements',
+              addElement: 'Add Element',
+              emptyDesign: 'No elements yet. Add one with the component.element search above.',
+              dragToReorder: 'Drag to reorder',
+              dragToReorderEntry: 'Drag to reorder entry',
+              removeEntry: 'Remove entry',
+              label: 'Label',
+              optionalLabelOverride: 'Optional label override',
+              selector: 'Selector',
+              onOff: 'On / Off',
+              freeText: 'Free Text',
+              numberOnly: 'Number Only',
+              valueSlider: 'Value Slider',
+              progress: 'Progress',
+              view: 'View',
+              options: 'Options',
+              oneValuePerLine: 'One value per line',
+              minimum: 'Minimum',
+              maximum: 'Maximum',
+              step: 'Step',
+              chooseElement: 'Choose an element to add.',
+              elementNotFound: 'Element not found.',
+              elementAlreadyAdded: 'Element already added.',
+              elementAdded: 'Element added.',
+              elementReordered: 'Element reordered.',
+              noSymbolsMatch: 'No symbols match that search.',
+              useSymbol: 'Use {label}',
+              unavailable: 'Unavailable',
+              notAZeroOneValue: 'Not a 0-1 value',
+              representationDefault: 'Default',
+              representationProgress: 'Progress',
+              selectValue: 'Select value',
+              currentValue: '{value} (current)',
+              pausedTimer: 'Paused timer',
+              runningTimer: 'Running timer',
+              stoppedTimer: 'Stopped timer',
+          }),
+          de: Object.freeze({
+              panelEyebrow: 'Steuerpanel',
+              modeReturnView: 'Zur Ansicht zurueckkehren',
+              modeEnterDesign: 'Designmodus aktivieren',
+              emptyView: 'Wechsle in den Designmodus, um Eigenschaften, Timer und Trigger hinzuzufuegen.',
+              trigger: 'Trigger',
+              panel: 'Panel',
+              name: 'Name',
+              dockSymbol: 'Dock-Symbol',
+              defaultSymbol: 'Standard {icon}',
+              searchEmojiSymbols: '⌕ Emoji und Symbole durchsuchen',
+              dockSymbolAria: 'Dock-Symbol',
+              searchSymbols: 'Symbole suchen',
+              dockSymbolPicker: 'Dock-Symbol-Auswahl',
+              searchDockSymbols: 'Dock-Symbole durchsuchen',
+              entryPlaceholder: 'komponente.element',
+              add: 'Hinzufuegen',
+              availableElements: 'Verfuegbare Control-Panel-Elemente',
+              addElement: 'Element hinzufuegen',
+              emptyDesign: 'Noch keine Elemente. Fuege oben ueber die component.element-Suche eines hinzu.',
+              dragToReorder: 'Zum Neuordnen ziehen',
+              dragToReorderEntry: 'Eintrag zum Neuordnen ziehen',
+              removeEntry: 'Eintrag entfernen',
+              label: 'Beschriftung',
+              optionalLabelOverride: 'Optionale Beschriftungsueberschreibung',
+              selector: 'Auswahl',
+              onOff: 'Ein / Aus',
+              freeText: 'Freitext',
+              numberOnly: 'Nur Zahlen',
+              valueSlider: 'Wertregler',
+              progress: 'Fortschritt',
+              view: 'Ansicht',
+              options: 'Optionen',
+              oneValuePerLine: 'Ein Wert pro Zeile',
+              minimum: 'Minimum',
+              maximum: 'Maximum',
+              step: 'Schritt',
+              chooseElement: 'Waehle ein Element zum Hinzufuegen aus.',
+              elementNotFound: 'Element nicht gefunden.',
+              elementAlreadyAdded: 'Element bereits hinzugefuegt.',
+              elementAdded: 'Element hinzugefuegt.',
+              elementReordered: 'Element neu angeordnet.',
+              noSymbolsMatch: 'Keine Symbole passen zu dieser Suche.',
+              useSymbol: '{label} verwenden',
+              unavailable: 'Nicht verfuegbar',
+              notAZeroOneValue: 'Kein 0-1-Wert',
+              representationDefault: 'Standard',
+              representationProgress: 'Fortschritt',
+              selectValue: 'Wert auswaehlen',
+              currentValue: '{value} (aktuell)',
+              pausedTimer: 'Timer pausiert',
+              runningTimer: 'Timer laeuft',
+              stoppedTimer: 'Timer gestoppt',
+          }),
+      });
+  
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = ControlPanelWindow.translations[language]?.[key]
+              ?? ControlPanelWindow.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
           this.syncModeButton();
           this.render();
       }
@@ -30172,8 +31193,8 @@
           if (this.mode === ControlPanelWindow.modeDesign) {
               this.panel.setLeadingHeaderAction({
                   iconText: ButtonSymbols.inspect,
-                  tooltip: 'Return to view mode',
-                  ariaLabel: 'Return to view mode',
+                  tooltip: this.t('modeReturnView'),
+                  ariaLabel: this.t('modeReturnView'),
                   onClick: () => {
                       this.setMode(ControlPanelWindow.modeView);
                   },
@@ -30183,8 +31204,8 @@
   
           this.panel.setLeadingHeaderAction({
               iconText: ButtonSymbols.settings,
-              tooltip: 'Enter design mode',
-              ariaLabel: 'Enter design mode',
+              tooltip: this.t('modeEnterDesign'),
+              ariaLabel: this.t('modeEnterDesign'),
               onClick: () => {
                   this.setMode(ControlPanelWindow.modeDesign);
               },
@@ -30201,7 +31222,7 @@
   
           if (!entries.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Switch to design mode to add properties, timers, and triggers.';
+              emptyState.innerText = this.t('emptyView');
               card.body.appendChild(emptyState);
               content.appendChild(card.element);
               return content;
@@ -30242,7 +31263,7 @@
           };
   
           if (entryRef.type === ControlPanelModel.entryTypeTrigger) {
-              const triggerButton = this.panelHelper.makeButton('secondary', 'Trigger', () => {
+              const triggerButton = this.panelHelper.makeButton('secondary', this.t('trigger'), () => {
                   const trigger = this.workspace.resolveControlPanelEntryRef(entryRef);
                   trigger?.trigger?.();
               });
@@ -30358,14 +31379,14 @@
       renderDesignMode() {
           const content = this.panelHelper.createElement('div', 'dp-stack');
           content.classList.add('dp-control-panel-shell');
-          const panelCard = this.panelHelper.createSectionCard('Panel');
+          const panelCard = this.panelHelper.createSectionCard(this.t('panel'));
           panelCard.body.classList.add('dp-section-body-spaced');
           const nameField = this.panelHelper.createElement('div', 'dp-control-design-field');
           const nameFieldLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
           const panelNameInput = this.panelHelper.createInput(this.controlPanel.name, (value) => {
               this.controlPanel.setName(value);
           });
-          nameFieldLabel.innerText = 'Name';
+          nameFieldLabel.innerText = this.t('name');
           this.panelNameInput = panelNameInput.element;
           nameField.appendChild(nameFieldLabel);
           nameField.appendChild(panelNameInput.element);
@@ -30375,21 +31396,21 @@
           const dockIconFieldLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
           const dockIconCombo = this.panelHelper.createElement('div', 'dp-control-symbol-combo');
           const dockIconInput = this.panelHelper.createInput(this.controlPanel.getDockIconText?.() ?? '', () => {}, {
-              placeholder: `Default ${ButtonSymbols.controlPanels}`,
+              placeholder: this.t('defaultSymbol', { icon: ButtonSymbols.controlPanels }),
           });
           const dockIconPickerButton = this.panelHelper.makeButton('secondary', '☺', () => {
               this.toggleDockIconPicker();
           });
           const dockIconPickerShell = this.panelHelper.createElement('div', 'dp-control-symbol-picker');
           const dockIconPickerSearch = this.panelHelper.createInput(this.symbolPickerQuery, () => {}, {
-              placeholder: '⌕ Search emoji and symbols',
+              placeholder: this.t('searchEmojiSymbols'),
           });
           const dockIconPickerResults = this.panelHelper.createElement('div', 'dp-control-symbol-picker-results');
   
-          dockIconFieldLabel.innerText = 'Dock Symbol';
+          dockIconFieldLabel.innerText = this.t('dockSymbol');
           dockIconField.addEventListener('focusout', this.handleDockIconPickerFieldFocusOut);
           dockIconInput.element.classList.add('dp-control-symbol-input');
-          dockIconInput.element.setAttribute('aria-label', 'Dock symbol');
+          dockIconInput.element.setAttribute('aria-label', this.t('dockSymbolAria'));
           dockIconInput.element.addEventListener('keydown', (event) => {
               if (event.key !== 'Escape' || this.isDockIconPickerOpen !== true) return;
               event.preventDefault();
@@ -30400,14 +31421,14 @@
           });
           dockIconPickerButton.classList.add('dp-control-symbol-trigger');
           dockIconPickerButton.type = 'button';
-          dockIconPickerButton.title = 'Search symbols';
+          dockIconPickerButton.title = this.t('searchSymbols');
           dockIconPickerButton.setAttribute('aria-haspopup', 'dialog');
-          dockIconPickerButton.setAttribute('aria-label', 'Search symbols');
+          dockIconPickerButton.setAttribute('aria-label', this.t('searchSymbols'));
           dockIconPickerShell.hidden = true;
           dockIconPickerShell.setAttribute('role', 'dialog');
-          dockIconPickerShell.setAttribute('aria-label', 'Dock symbol picker');
+          dockIconPickerShell.setAttribute('aria-label', this.t('dockSymbolPicker'));
           dockIconPickerSearch.element.classList.add('dp-control-symbol-search');
-          dockIconPickerSearch.element.setAttribute('aria-label', 'Search dock symbols');
+          dockIconPickerSearch.element.setAttribute('aria-label', this.t('searchDockSymbols'));
           dockIconPickerSearch.element.addEventListener('input', () => {
               this.refreshDockIconPickerResults();
           });
@@ -30444,12 +31465,12 @@
           const suggestionShell = this.panelHelper.createElement('div', 'dp-commandline-input-shell dp-control-entry-input-shell');
           const suggestionsElement = this.panelHelper.createElement('div', 'dp-commandline-suggestions dp-control-entry-suggestions');
           const entryInput = this.panelHelper.createInput('', () => {}, {
-              placeholder: 'component.element',
+              placeholder: this.t('entryPlaceholder'),
           });
           this.panelEntryInput = entryInput.element;
           this.panelEntrySuggestionShell = suggestionShell;
           this.panelEntrySuggestionsElement = suggestionsElement;
-          const addButton = this.panelHelper.makeButton('light', 'Add', () => {
+          const addButton = this.panelHelper.makeButton('light', this.t('add'), () => {
               this.closeEntrySuggestions();
               this.addEntryFromInput();
           });
@@ -30461,7 +31482,7 @@
           entryInput.element.setAttribute('aria-haspopup', 'listbox');
           suggestionsElement.hidden = true;
           suggestionsElement.setAttribute('role', 'listbox');
-          suggestionsElement.setAttribute('aria-label', 'Available control panel elements');
+          suggestionsElement.setAttribute('aria-label', this.t('availableElements'));
           entryInput.element.addEventListener('focus', () => {
               if (this.suppressNextEntrySuggestionFocus === true) {
                   this.suppressNextEntrySuggestionFocus = false;
@@ -30521,13 +31542,13 @@
           addRow.appendChild(inputWrapper);
           addRow.appendChild(actionsWrapper);
   
-          entriesCard.body.appendChild(this.panelHelper.createSectionTitle('Add Element'));
+          entriesCard.body.appendChild(this.panelHelper.createSectionTitle(this.t('addElement')));
           entriesCard.body.appendChild(addRow);
   
           const entries = this.controlPanel.getEntries();
           if (!entries.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'No elements yet. Add one with the component.element search above.';
+              emptyState.innerText = this.t('emptyDesign');
               entriesCard.body.appendChild(emptyState);
               content.appendChild(entriesCard.element);
               return content;
@@ -30557,16 +31578,16 @@
           dragHandle.type = 'button';
           dragHandle.innerText = ButtonSymbols.reorder;
           dragHandle.draggable = true;
-          dragHandle.title = 'Drag to reorder';
-          dragHandle.setAttribute('aria-label', 'Drag to reorder entry');
+          dragHandle.title = this.t('dragToReorder');
+          dragHandle.setAttribute('aria-label', this.t('dragToReorderEntry'));
           dragHandle.addEventListener('dragstart', (event) => {
               this.handleDesignEntryDragStart(entryRef, event);
           });
           dragHandle.addEventListener('dragend', () => {
               this.clearDesignEntryDragState();
           });
-          removeButton.title = 'Remove entry';
-          removeButton.setAttribute('aria-label', 'Remove entry');
+          removeButton.title = this.t('removeEntry');
+          removeButton.setAttribute('aria-label', this.t('removeEntry'));
           row.setAttribute('data-entry-key', entryKey);
           row.addEventListener('dragover', (event) => {
               this.handleDesignEntryDragOver(entryRef, row, event);
@@ -30582,9 +31603,9 @@
           const labelField = this.panelHelper.createElement('div', 'dp-control-design-field');
           const labelFieldLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
           const labelInput = this.panelHelper.createInput(entryRef.label ?? '', () => {}, {
-              placeholder: 'Optional label override',
+              placeholder: this.t('optionalLabelOverride'),
           });
-          labelFieldLabel.innerText = 'Label';
+          labelFieldLabel.innerText = this.t('label');
           labelInput.element.addEventListener('change', () => {
               this.updateEntryConfiguration(entryRef, {
                   label: labelInput.element.value,
@@ -30601,17 +31622,17 @@
               const representationLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
               const representationSelect = document.createElement('select');
               const representationOptions = [
-                  [ControlPanelModel.propertyRepresentationDefault, 'Default'],
-                  [ControlPanelModel.propertyRepresentationDropdown, 'Selector'],
-                  [ControlPanelModel.propertyRepresentationBooleanToggle, 'On / Off'],
-                  [ControlPanelModel.propertyRepresentationText, 'Free Text'],
-                  [ControlPanelModel.propertyRepresentationNumber, 'Number Only'],
-                  [ControlPanelModel.propertyRepresentationSlider, 'Value Slider'],
+                  [ControlPanelModel.propertyRepresentationDefault, this.t('representationDefault')],
+                  [ControlPanelModel.propertyRepresentationDropdown, this.t('selector')],
+                  [ControlPanelModel.propertyRepresentationBooleanToggle, this.t('onOff')],
+                  [ControlPanelModel.propertyRepresentationText, this.t('freeText')],
+                  [ControlPanelModel.propertyRepresentationNumber, this.t('numberOnly')],
+                  [ControlPanelModel.propertyRepresentationSlider, this.t('valueSlider')],
               ];
               if (propertyDisplayConfig.representation === ControlPanelModel.propertyRepresentationProgress) {
-                  representationOptions.push([ControlPanelModel.propertyRepresentationProgress, 'Progress']);
+                  representationOptions.push([ControlPanelModel.propertyRepresentationProgress, this.t('progress')]);
               }
-              representationLabel.innerText = 'View';
+              representationLabel.innerText = this.t('view');
               representationSelect.className = 'dp-input';
               representationOptions.forEach(([value, label]) => {
                   const option = document.createElement('option');
@@ -30633,9 +31654,9 @@
                   const optionsField = this.panelHelper.createElement('div', 'dp-control-design-field');
                   const optionsLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
                   const optionsTextarea = document.createElement('textarea');
-                  optionsLabel.innerText = 'Options';
+                  optionsLabel.innerText = this.t('options');
                   optionsTextarea.className = 'dp-load-textarea dp-control-design-textarea';
-                  optionsTextarea.placeholder = 'One value per line';
+                  optionsTextarea.placeholder = this.t('oneValuePerLine');
                   optionsTextarea.value = propertyDisplayConfig.optionsText ?? '';
                   optionsTextarea.addEventListener('change', () => {
                       this.updatePropertyConfiguration(entryRef, {
@@ -30649,9 +31670,9 @@
   
               if (propertyRepresentationOverride === ControlPanelModel.propertyRepresentationSlider) {
                   [
-                      ['Minimum', propertyDisplayConfig.minValue, 'minValue'],
-                      ['Maximum', propertyDisplayConfig.maxValue, 'maxValue'],
-                      ['Step', propertyDisplayConfig.stepValue, 'stepValue'],
+                      [this.t('minimum'), propertyDisplayConfig.minValue, 'minValue'],
+                      [this.t('maximum'), propertyDisplayConfig.maxValue, 'maxValue'],
+                      [this.t('step'), propertyDisplayConfig.stepValue, 'stepValue'],
                   ].forEach(([fieldLabel, fieldValue, fieldKey]) => {
                       const numberField = this.panelHelper.createElement('div', 'dp-control-design-field');
                       const numberFieldLabel = this.panelHelper.createElement('div', 'dp-control-design-field-label');
@@ -30832,26 +31853,26 @@
           const nextPath = typeof path === 'string' ? path : (this.panelEntryInput?.value ?? '');
           const normalizedPath = String(nextPath ?? '').trim();
           if (!normalizedPath) {
-              this.setStatus('Choose an element to add.');
+              this.setStatus(this.t('chooseElement'));
               this.panelEntryInput?.focus();
               return false;
           }
           const entryRef = this.workspace.resolveControlPanelEntryPath(normalizedPath);
           if (!entryRef) {
-              this.setStatus('Element not found.');
+              this.setStatus(this.t('elementNotFound'));
               this.panelEntryInput?.focus();
               return false;
           }
           const added = this.controlPanel.addEntry(entryRef);
           if (!added) {
-              this.setStatus('Element already added.');
+              this.setStatus(this.t('elementAlreadyAdded'));
               this.panelEntryInput?.focus();
               return false;
           }
           if (this.panelEntryInput) {
               this.panelEntryInput.value = '';
           }
-          this.setStatus('Element added.');
+          this.setStatus(this.t('elementAdded'));
           this.suppressNextEntrySuggestionFocus = true;
           this.panelEntryInput?.focus();
           return true;
@@ -30946,7 +31967,7 @@
           this.clearDesignEntryDragState();
           if (nextIndex == null || !draggedEntryRef) return;
           if (this.controlPanel.moveEntry(draggedEntryRef, nextIndex)) {
-              this.setStatus('Element reordered.');
+              this.setStatus(this.t('elementReordered'));
           }
       }
   
@@ -31136,7 +32157,7 @@
           this.panelDockIconPickerResults.replaceChildren();
   
           const actions = this.panelHelper.createElement('div', 'dp-control-symbol-picker-actions');
-          const defaultButton = this.panelHelper.makeButton('light', `Default ${ButtonSymbols.controlPanels}`, () => {
+          const defaultButton = this.panelHelper.makeButton('light', this.t('defaultSymbol', { icon: ButtonSymbols.controlPanels }), () => {
               this.controlPanel.setDockIconText('');
               this.syncDockIconInput();
               this.toggleDockIconPicker(false);
@@ -31149,7 +32170,7 @@
           const matches = this.getDockIconPickerMatches(nextQuery);
           if (!matches.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'No symbols match that search.';
+              emptyState.innerText = this.t('noSymbolsMatch');
               this.panelDockIconPickerResults.appendChild(emptyState);
               this.positionDockIconPicker();
               return;
@@ -31173,7 +32194,7 @@
                   const symbolElement = this.panelHelper.createElement('span', 'dp-control-symbol-option-symbol');
                   const labelElement = this.panelHelper.createElement('span', 'dp-control-symbol-option-label');
                   optionButton.type = 'button';
-                  optionButton.setAttribute('aria-label', `Use ${symbolEntry.label}`);
+                  optionButton.setAttribute('aria-label', this.t('useSymbol', { label: symbolEntry.label }));
                   optionButton.title = symbolEntry.label;
                   symbolElement.innerText = symbolEntry.symbol;
                   labelElement.innerText = symbolEntry.label;
@@ -31351,9 +32372,9 @@
               labelElement.innerText = this.getEntryDisplayLabel(entryRef);
   
               if (!entry) {
-                  if (valueElement) valueElement.innerText = 'Unavailable';
+                  if (valueElement) valueElement.innerText = this.t('unavailable');
                   if (textInputElement) {
-                      textInputElement.value = 'Unavailable';
+                      textInputElement.value = this.t('unavailable');
                       textInputElement.disabled = true;
                   }
                   if (numberInputElement) {
@@ -31363,7 +32384,7 @@
                   if (sliderElement) {
                       sliderElement.disabled = true;
                   }
-                  if (sliderValueElement) sliderValueElement.innerText = 'Unavailable';
+                  if (sliderValueElement) sliderValueElement.innerText = this.t('unavailable');
                   this.setEntryMeta(metaElement, this.getMissingEntryMeta(entryRef));
                   if (triggerButton) triggerButton.disabled = true;
                   if (selectElement) selectElement.disabled = true;
@@ -31372,7 +32393,7 @@
                       toggleSwitch.setChecked(false);
                   }
                   if (progressFillElement) progressFillElement.style.width = '0%';
-                  if (progressValueElement) progressValueElement.innerText = 'Unavailable';
+                  if (progressValueElement) progressValueElement.innerText = this.t('unavailable');
                   return;
               }
   
@@ -31405,7 +32426,7 @@
                       const progressFraction = this.getProgressFraction(propertyValue);
                       progressFillElement.style.width = `${Math.round((progressFraction ?? 0) * 100)}%`;
                       progressValueElement.innerText = progressFraction == null
-                          ? 'Not a 0-1 value'
+                          ? this.t('notAZeroOneValue')
                           : `${Math.round(progressFraction * 100)}%`;
                   }
                   return;
@@ -31497,13 +32518,13 @@
       }
   
       getPropertyRepresentationLabel(representation) {
-          if (representation === ControlPanelModel.propertyRepresentationDefault) return 'Default';
-          if (representation === ControlPanelModel.propertyRepresentationDropdown) return 'Selector';
-          if (representation === ControlPanelModel.propertyRepresentationBooleanToggle) return 'On / Off';
-          if (representation === ControlPanelModel.propertyRepresentationNumber) return 'Number Only';
-          if (representation === ControlPanelModel.propertyRepresentationSlider) return 'Value Slider';
-          if (representation === ControlPanelModel.propertyRepresentationProgress) return 'Progress';
-          return 'Free Text';
+          if (representation === ControlPanelModel.propertyRepresentationDefault) return this.t('representationDefault');
+          if (representation === ControlPanelModel.propertyRepresentationDropdown) return this.t('selector');
+          if (representation === ControlPanelModel.propertyRepresentationBooleanToggle) return this.t('onOff');
+          if (representation === ControlPanelModel.propertyRepresentationNumber) return this.t('numberOnly');
+          if (representation === ControlPanelModel.propertyRepresentationSlider) return this.t('valueSlider');
+          if (representation === ControlPanelModel.propertyRepresentationProgress) return this.t('representationProgress');
+          return this.t('freeText');
       }
   
       getDropdownOptions(entryRef) {
@@ -31530,7 +32551,7 @@
                       && optionValue === normalizedValue
                       && !configuredOptions.includes(normalizedValue)
                   )
-                      ? (optionValue === '' ? 'Select value' : `${optionValue} (current)`)
+                      ? (optionValue === '' ? this.t('selectValue') : this.t('currentValue', { value: optionValue }))
                       : optionValue;
                   selectElement.appendChild(option);
               });
@@ -31565,7 +32586,7 @@
           }
           valueElement.innerText = Number.isFinite(numericValue)
               ? String(numericValue)
-              : 'Not a number';
+              : this.t('notANumber');
       }
   
       writeNumericPropertyValue(property, rawValue) {
@@ -31598,12 +32619,12 @@
   
       getTimerStatusLabel(timer) {
           if (this.workspace.getRunState() === ExecutionEnvironment.runStatePaused) {
-              return 'Paused timer';
+              return this.t('pausedTimer');
           }
           if (timer.getRunning?.()) {
-              return 'Running timer';
+              return this.t('runningTimer');
           }
-          return 'Stopped timer';
+          return this.t('stoppedTimer');
       }
   
       formatDuration(milliseconds) {
@@ -31634,14 +32655,41 @@
   <script>
   class ControlPanelsPanel {
   
+      static translations = Object.freeze({
+          en: Object.freeze({
+              panelTitle: 'Control Panels',
+              panelEyebrow: 'Workspace',
+              sectionTitle: 'Panels',
+              addPanel: 'Add Panel',
+              emptyState: 'Create a panel to group properties, timers, and triggers into a focused view.',
+              openViewMode: 'Open panel in view mode',
+              openDesignMode: 'Open panel in design mode',
+              deletePanel: 'Delete panel',
+              elementCountOne: '{count} element',
+              elementCountMany: '{count} elements',
+          }),
+          de: Object.freeze({
+              panelTitle: 'Steuerpanels',
+              panelEyebrow: 'Workspace',
+              sectionTitle: 'Bedienfelder',
+              addPanel: 'Panel hinzufuegen',
+              emptyState: 'Erstelle ein Panel, um Eigenschaften, Timer und Trigger in einer fokussierten Ansicht zu gruppieren.',
+              openViewMode: 'Panel im Ansichtsmodus oeffnen',
+              openDesignMode: 'Panel im Designmodus oeffnen',
+              deletePanel: 'Panel loeschen',
+              elementCountOne: '{count} Element',
+              elementCountMany: '{count} Elemente',
+          }),
+      });
+  
       constructor(x, y, workspace, panelHelper) {
           this.workspace = workspace;
           this.panelHelper = panelHelper;
           this.listenerKey = 'control-panels-panel';
           this.controlPanelWindows = new Map();
           this.panel = new Panel(x, y, panelHelper, {
-              title: 'Control Panels',
-              eyebrow: 'Workspace',
+              title: this.t('panelTitle'),
+              eyebrow: this.t('panelEyebrow'),
               variant: 'workspace',
               dockIconText: ButtonSymbols.controlPanels,
               persistenceId: 'workspace:control-panels',
@@ -31668,6 +32716,27 @@
               this.render();
           }, this.listenerKey);
   
+          this.render();
+      }
+  
+      t(key, params = {}) {
+          const language = globalThis.DoublePhiI18n?.normalizeLanguage?.(
+              globalThis.DoublePhiI18n?.getLanguage?.(),
+          ) ?? 'en';
+          const template = ControlPanelsPanel.translations[language]?.[key]
+              ?? ControlPanelsPanel.translations.en[key]
+              ?? key;
+          return String(template).replace(/\{(\w+)\}/g, (_, token) => (
+              Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : `{${token}}`
+          ));
+      }
+  
+      refreshLanguageUi() {
+          this.panel?.setTitle?.(this.t('panelTitle'));
+          this.panel?.setEyebrow?.(this.t('panelEyebrow'));
+          this.controlPanelWindows.forEach((windowInstance) => {
+              windowInstance?.refreshLanguageUi?.();
+          });
           this.render();
       }
   
@@ -31723,11 +32792,11 @@
   
       render() {
           const shell = this.panelHelper.createElement('div', 'dp-stack dp-fill-shell');
-          const card = this.panelHelper.createSectionCard('Panels');
+          const card = this.panelHelper.createSectionCard(this.t('sectionTitle'));
           card.element.classList.add('dp-fill-card');
           card.body.classList.add('dp-fill-body');
           const actions = this.panelHelper.createElement('div', 'dp-inline-actions');
-          const addButton = this.panelHelper.makeButton('', 'Add Panel', () => {
+          const addButton = this.panelHelper.makeButton('', this.t('addPanel'), () => {
               this.createNewPanel();
           });
           actions.appendChild(addButton);
@@ -31736,7 +32805,7 @@
           const controlPanels = this.workspace.getControlPanels();
           if (!controlPanels.length) {
               const emptyState = this.panelHelper.createElement('div', 'dp-empty-state');
-              emptyState.innerText = 'Create a panel to group properties, timers, and triggers into a focused view.';
+              emptyState.innerText = this.t('emptyState');
               card.body.appendChild(emptyState);
               shell.appendChild(card.element);
               this.root.replaceChildren(shell);
@@ -31758,18 +32827,20 @@
           const title = this.panelHelper.createElement('div', 'dp-control-manager-title');
           const meta = this.panelHelper.createElement('div', 'dp-control-manager-meta');
           const actions = this.panelHelper.createElement('div', 'dp-control-manager-actions');
-          const viewButton = this.makeActionButton(ButtonSymbols.inspect, 'Open panel in view mode', () => {
+          const viewButton = this.makeActionButton(ButtonSymbols.inspect, this.t('openViewMode'), () => {
               this.ensureControlPanelWindow(controlPanel).open(ControlPanelWindow.modeView);
           }, 'secondary');
-          const designButton = this.makeActionButton(ButtonSymbols.settings, 'Open panel in design mode', () => {
+          const designButton = this.makeActionButton(ButtonSymbols.settings, this.t('openDesignMode'), () => {
               this.ensureControlPanelWindow(controlPanel).open(ControlPanelWindow.modeDesign);
           }, 'secondary');
-          const deleteButton = this.makeActionButton(ButtonSymbols.delete, 'Delete panel', () => {
+          const deleteButton = this.makeActionButton(ButtonSymbols.delete, this.t('deletePanel'), () => {
               this.workspace.deleteControlPanel(controlPanel);
           });
   
           title.innerText = controlPanel.name;
-          meta.innerText = `${controlPanel.getEntries().length} element${controlPanel.getEntries().length === 1 ? '' : 's'}`;
+          meta.innerText = this.t(controlPanel.getEntries().length === 1 ? 'elementCountOne' : 'elementCountMany', {
+              count: controlPanel.getEntries().length,
+          });
   
           details.appendChild(title);
           details.appendChild(meta);
@@ -32279,6 +33350,12 @@
       app.startupIntro = startupIntro;
       window.doublephiApp = app;
       return app;
+  }
+  
+  if (document.readyState === 'complete') {
+      start();
+  } else {
+      window.addEventListener('load', start, { once: true });
   }
   </script>
   <title>Jigbox</title>
@@ -33340,6 +34417,56 @@
 
     .dp-component-quick-actions {
       margin: 14px 0;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      container-type: inline-size;
+    }
+
+    .dp-component-quick-action {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .dp-component-quick-action-glyph {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.1em;
+      font-size: 14px;
+      line-height: 1;
+      color: var(--panel-accent);
+    }
+
+    .dp-component-quick-action-label {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .dp-component-quick-actions.is-compact .dp-component-quick-action {
+      flex: 1 1 0;
+      min-width: 0;
+      padding-inline: 0;
+    }
+
+    .dp-component-quick-actions.is-compact .dp-component-quick-action-label {
+      display: none;
+    }
+
+    @container (max-width: 420px) {
+      .dp-component-quick-action {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 0;
+      }
+
+      .dp-component-quick-action-label {
+        display: none;
+      }
     }
 
     .dp-library-panel-actions {
@@ -36249,7 +37376,7 @@
   </style>
 </head>
 
-<body onload="start()">
+<body>
   <!-- <div style="position: absolute; left: 40px;  top: 40px; z-index: 100000; ">HELLO</div> -->
   <!-- style=" background-color: #002082;" -->
   <div id="app-root">
