@@ -7341,38 +7341,127 @@
   
       buildNetworkGuardScript() {
           const allowedOrigin = globalThis?.location?.origin ?? null;
+          const allowedBaseUrl = globalThis?.location?.href ?? null;
           return `
   const __doublephiAllowedOrigin = ${JSON.stringify(allowedOrigin)};
+  const __doublephiAllowedBaseUrl = ${JSON.stringify(allowedBaseUrl)};
   const __doublephiOriginalFetch = typeof globalThis.fetch === 'function'
       ? globalThis.fetch.bind(globalThis)
       : null;
+  const __doublephiOriginalImportScripts = typeof globalThis.importScripts === 'function'
+      ? globalThis.importScripts.bind(globalThis)
+      : null;
+  const __doublephiOriginalXmlHttpRequestOpen = typeof globalThis.XMLHttpRequest?.prototype?.open === 'function'
+      ? globalThis.XMLHttpRequest.prototype.open
+      : null;
+  const __doublephiOriginalWebSocket = typeof globalThis.WebSocket === 'function'
+      ? globalThis.WebSocket
+      : null;
+  const __doublephiOriginalEventSource = typeof globalThis.EventSource === 'function'
+      ? globalThis.EventSource
+      : null;
+  const __doublephiOriginalWorker = typeof globalThis.Worker === 'function'
+      ? globalThis.Worker
+      : null;
+  const __doublephiOriginalSharedWorker = typeof globalThis.SharedWorker === 'function'
+      ? globalThis.SharedWorker
+      : null;
   
-  function __doublephiResolveFetchUrl(input) {
-      if (input instanceof Request) return new URL(input.url, __doublephiAllowedOrigin ?? globalThis?.location?.origin ?? undefined);
+  function __doublephiResolveUrl(input) {
+      if (input instanceof Request) return new URL(input.url, __doublephiAllowedBaseUrl ?? globalThis?.location?.href ?? undefined);
       if (input instanceof URL) return input;
-      return new URL(String(input), __doublephiAllowedOrigin ?? globalThis?.location?.origin ?? undefined);
+      return new URL(String(input), __doublephiAllowedBaseUrl ?? globalThis?.location?.href ?? undefined);
   }
   
-  function __doublephiIsAllowedFetchUrl(url) {
-      return Boolean(__doublephiAllowedOrigin) && url?.origin === __doublephiAllowedOrigin;
+  function __doublephiIsAllowedUrl(url) {
+      if (!Boolean(__doublephiAllowedOrigin) || !url) return false;
+      if (url.origin === __doublephiAllowedOrigin) return true;
+      if (!__doublephiAllowedBaseUrl) return false;
+  
+      const allowedUrl = new URL(__doublephiAllowedBaseUrl);
+      const isWebSocketUrl = url.protocol === 'ws:' || url.protocol === 'wss:';
+      if (!isWebSocketUrl) return false;
+  
+      return (
+          (allowedUrl.protocol === 'http:' && url.protocol === 'ws:')
+          || (allowedUrl.protocol === 'https:' && url.protocol === 'wss:')
+      ) && url.hostname === allowedUrl.hostname && url.port === allowedUrl.port;
+  }
+  
+  function __doublephiCreateBlockedUrlError(apiName, resolvedUrl) {
+      return new Error(
+          apiName + ' blocked for "' + resolvedUrl.href + '". Only same-origin requests to ' + __doublephiAllowedOrigin + ' are allowed.',
+      );
+  }
+  
+  function __doublephiAssertAllowedUrl(input, apiName) {
+      const resolvedUrl = __doublephiResolveUrl(input);
+      if (!__doublephiIsAllowedUrl(resolvedUrl)) {
+          throw __doublephiCreateBlockedUrlError(apiName, resolvedUrl);
+      }
+      return resolvedUrl;
   }
   
   if (__doublephiOriginalFetch) {
       globalThis.fetch = (input, init) => {
-          let resolvedUrl;
           try {
-              resolvedUrl = __doublephiResolveFetchUrl(input);
+              __doublephiAssertAllowedUrl(input, 'Worker fetch');
           } catch (error) {
               return Promise.reject(error);
           }
-  
-          if (!__doublephiIsAllowedFetchUrl(resolvedUrl)) {
-              return Promise.reject(new Error(
-                  \`Worker fetch blocked for "\${resolvedUrl.href}". Only same-origin requests to \${__doublephiAllowedOrigin} are allowed.\`,
-              ));
-          }
-  
           return __doublephiOriginalFetch(input, init);
+      };
+  }
+  
+  if (__doublephiOriginalImportScripts) {
+      globalThis.importScripts = (...inputs) => {
+          inputs.forEach((input) => {
+              __doublephiAssertAllowedUrl(input, 'Worker importScripts');
+          });
+          return __doublephiOriginalImportScripts(...inputs);
+      };
+  }
+  
+  if (__doublephiOriginalXmlHttpRequestOpen) {
+      globalThis.XMLHttpRequest.prototype.open = function(method, input, ...rest) {
+          __doublephiAssertAllowedUrl(input, 'Worker XMLHttpRequest');
+          return __doublephiOriginalXmlHttpRequestOpen.call(this, method, input, ...rest);
+      };
+  }
+  
+  if (__doublephiOriginalWebSocket) {
+      globalThis.WebSocket = class DoublephiWebSocket extends __doublephiOriginalWebSocket {
+          constructor(input, protocols) {
+              __doublephiAssertAllowedUrl(input, 'Worker WebSocket');
+              super(input, protocols);
+          }
+      };
+  }
+  
+  if (__doublephiOriginalEventSource) {
+      globalThis.EventSource = class DoublephiEventSource extends __doublephiOriginalEventSource {
+          constructor(input, init = undefined) {
+              __doublephiAssertAllowedUrl(input, 'Worker EventSource');
+              super(input, init);
+          }
+      };
+  }
+  
+  if (__doublephiOriginalWorker) {
+      globalThis.Worker = class DoublephiWorker extends __doublephiOriginalWorker {
+          constructor(input, options = undefined) {
+              __doublephiAssertAllowedUrl(input, 'Worker constructor');
+              super(input, options);
+          }
+      };
+  }
+  
+  if (__doublephiOriginalSharedWorker) {
+      globalThis.SharedWorker = class DoublephiSharedWorker extends __doublephiOriginalSharedWorker {
+          constructor(input, options = undefined) {
+              __doublephiAssertAllowedUrl(input, 'Worker SharedWorker');
+              super(input, options);
+          }
       };
   }
   `.trim();
