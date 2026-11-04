@@ -1611,6 +1611,9 @@
           'settings.languageDescription': 'Choose the interface language used across settings, startup, and the main workspace windows.',
           'settings.languageSelectAria': 'Choose interface language',
           'settings.display': 'Display',
+          'settings.searchLabel': 'Search settings',
+          'settings.searchPlaceholder': 'Search settings…',
+          'settings.noSearchMatches': 'No settings match your search.',
           'settings.theme': 'Theme',
           'settings.themeDescription': 'Choose between the default window styling and a darker command-line inspired theme.',
           'settings.interfaceSize': 'Interface Size',
@@ -1626,6 +1629,25 @@
           'settings.componentHighlightingDescription': 'Show packet-activity highlighting for components, containers, properties, channels, and their connections.',
           'settings.connectorHighlighting': 'Connector Highlighting',
           'settings.connectorHighlightingDescription': 'Show connector hover and preview highlighting while wiring channels and properties together.',
+          'settings.runtimeLimits': 'Runtime message limits',
+          'settings.runtimeLimitsDescription': 'Saved in this browser. Changes apply after Stop and Start, or Restart. Higher limits allow greater CPU and memory use.',
+          'settings.runtimeLimitsReset': 'Restore runtime defaults',
+          'settings.runtime.maxMessagesPerSecond': 'Component messages per second',
+          'settings.runtime.maxMessagesPerSecondDescription': 'Maximum messages sent by one component each second.',
+          'settings.runtime.maxSimulationMessagesPerSecond': 'Simulation messages per second',
+          'settings.runtime.maxSimulationMessagesPerSecondDescription': 'Total incoming and outgoing messages across the simulation each second.',
+          'settings.runtime.maxMessageChars': 'Message size (characters)',
+          'settings.runtime.maxMessageCharsDescription': 'Maximum size of one message, including field names, values and JSON punctuation.',
+          'settings.runtime.maxCharsPerSecond': 'Component characters per second',
+          'settings.runtime.maxCharsPerSecondDescription': 'Total message text sent by one component each second.',
+          'settings.runtime.maxSimulationCharsPerSecond': 'Simulation characters per second',
+          'settings.runtime.maxSimulationCharsPerSecondDescription': 'Total incoming and outgoing message text across the simulation each second.',
+          'settings.runtime.maxLogsPerSecond': 'Component log entries per second',
+          'settings.runtime.maxLogsPerSecondDescription': 'Maximum log entries sent by one component each second.',
+          'settings.runtime.maxSimulationLogsPerSecond': 'Simulation log entries per second',
+          'settings.runtime.maxSimulationLogsPerSecondDescription': 'Maximum log entries across the simulation each second.',
+          'settings.runtime.maxPendingMessages': 'Startup queue (messages)',
+          'settings.runtime.maxPendingMessagesDescription': 'Maximum messages per component startup queue.',
           'settings.featureGates': 'Feature Gates',
           'settings.libraryWindow': 'Library Window',
           'settings.libraryWindowDescription': 'Show the Library window button in the toolbar menu.',
@@ -1790,6 +1812,9 @@
           'settings.languageDescription': 'Wahle die Oberflachensprache fur Einstellungen, Startseite und die wichtigsten Arbeitsfenster.',
           'settings.languageSelectAria': 'Oberflachensprache auswahlen',
           'settings.display': 'Anzeige',
+          'settings.searchLabel': 'Einstellungen durchsuchen',
+          'settings.searchPlaceholder': 'Einstellungen durchsuchen…',
+          'settings.noSearchMatches': 'Keine Einstellungen passen zur Suche.',
           'settings.theme': 'Design',
           'settings.themeDescription': 'Wahle zwischen dem Standardstil der Fenster und einem dunkleren, terminalinspirierten Design.',
           'settings.interfaceSize': 'Oberflachengrosse',
@@ -1805,6 +1830,25 @@
           'settings.componentHighlightingDescription': 'Zeigt Aktivitatshervorhebung fur Komponenten, Container, Eigenschaften, Kanale und ihre Verbindungen an.',
           'settings.connectorHighlighting': 'Verbinder-Hervorhebung',
           'settings.connectorHighlightingDescription': 'Zeigt Hover- und Vorschau-Hervorhebungen beim Verbinden von Kanalen und Eigenschaften an.',
+          'settings.runtimeLimits': 'Nachrichtenlimits der Simulation',
+          'settings.runtimeLimitsDescription': 'In diesem Browser gespeichert. Gilt nach Stoppen und Starten oder Neustart der Simulation. Hoehere Limits erlauben mehr CPU- und Speichernutzung.',
+          'settings.runtimeLimitsReset': 'Standardlimits wiederherstellen',
+          'settings.runtime.maxMessagesPerSecond': 'Komponentennachrichten pro Sekunde',
+          'settings.runtime.maxMessagesPerSecondDescription': 'Maximale Nachrichten einer Komponente pro Sekunde.',
+          'settings.runtime.maxSimulationMessagesPerSecond': 'Simulationsnachrichten pro Sekunde',
+          'settings.runtime.maxSimulationMessagesPerSecondDescription': 'Alle ein- und ausgehenden Nachrichten der Simulation pro Sekunde.',
+          'settings.runtime.maxMessageChars': 'Nachrichtengroesse (Zeichen)',
+          'settings.runtime.maxMessageCharsDescription': 'Maximale Groesse einer Nachricht einschliesslich Feldnamen, Werten und JSON-Zeichen.',
+          'settings.runtime.maxCharsPerSecond': 'Komponentenzeichen pro Sekunde',
+          'settings.runtime.maxCharsPerSecondDescription': 'Gesamter Nachrichtentext einer Komponente pro Sekunde.',
+          'settings.runtime.maxSimulationCharsPerSecond': 'Simulationszeichen pro Sekunde',
+          'settings.runtime.maxSimulationCharsPerSecondDescription': 'Gesamter ein- und ausgehender Nachrichtentext der Simulation pro Sekunde.',
+          'settings.runtime.maxLogsPerSecond': 'Komponenten-Logeintraege pro Sekunde',
+          'settings.runtime.maxLogsPerSecondDescription': 'Maximale Logeintraege einer Komponente pro Sekunde.',
+          'settings.runtime.maxSimulationLogsPerSecond': 'Simulations-Logeintraege pro Sekunde',
+          'settings.runtime.maxSimulationLogsPerSecondDescription': 'Maximale Logeintraege der gesamten Simulation pro Sekunde.',
+          'settings.runtime.maxPendingMessages': 'Startwarteschlange (Nachrichten)',
+          'settings.runtime.maxPendingMessagesDescription': 'Maximale Nachrichten pro Startwarteschlange einer Komponente.',
           'settings.featureGates': 'Funktionsschalter',
           'settings.libraryWindow': 'Bibliotheksfenster',
           'settings.libraryWindowDescription': 'Zeigt die Schaltflache fur das Bibliotheksfenster in der Symbolleiste an.',
@@ -2006,6 +2050,131 @@
   
   globalThis.DoublePhiI18n = globalThis.DoublePhiI18n ?? new DoublePhiI18nService();
   </script>
+  <!-- inlined from ./lib/Code/RuntimeMessageProtocol.js -->
+  <script>
+  // Only bounded JSON data crosses the boundary between a model and the UI.
+  // This class is also copied into the trusted sandbox bridge's separate realm.
+  class RuntimeMessageProtocol {
+      static maxMessageChars = 65536;
+      static maxScriptChars = 1024 * 1024;
+      static maxPendingMessages = 256;
+      static maxMessagesPerSecond = 500;
+      static maxCharsPerSecond = 1024 * 1024;
+      static limitDefinitions = Object.freeze({
+          maxMessagesPerSecond: { defaultValue: this.maxMessagesPerSecond, min: 1, max: 100000 },
+          maxSimulationMessagesPerSecond: { defaultValue: 2000, min: 1, max: 1000000 },
+          maxMessageChars: { defaultValue: this.maxMessageChars, min: 256, max: 1048576 },
+          maxCharsPerSecond: { defaultValue: this.maxCharsPerSecond, min: 256, max: 67108864 },
+          maxSimulationCharsPerSecond: { defaultValue: 2097152, min: 256, max: 268435456 },
+          maxLogsPerSecond: { defaultValue: 20, min: 1, max: 1000 },
+          maxSimulationLogsPerSecond: { defaultValue: 64, min: 1, max: 5000 },
+          maxPendingMessages: { defaultValue: this.maxPendingMessages, min: 1, max: 16384 },
+      });
+      static defaultLimits = Object.freeze(Object.fromEntries(
+          Object.entries(this.limitDefinitions).map(([key, definition]) => [key, definition.defaultValue]),
+      ));
+  
+      static normalizeLimits(limits) {
+          return Object.freeze(Object.fromEntries(Object.entries(this.limitDefinitions).map(([key, definition]) => {
+              const raw = limits?.[key];
+              const value = typeof raw === 'number' || (typeof raw === 'string' && raw.trim()) ? Number(raw) : NaN;
+              return [key, Number.isFinite(value)
+                  ? Math.min(definition.max, Math.max(definition.min, Math.trunc(value)))
+                  : definition.defaultValue];
+          })));
+      }
+  
+      static encodeValue(value, limits = this.defaultLimits) {
+          let nodes = 0;
+          let chars = 0;
+          const seen = new Set();
+          const visit = (item, depth) => {
+              if (++nodes > 4096 || depth > 16) throw new Error('Runtime message is too complex.');
+              if (item === null || typeof item === 'boolean') return;
+              if (typeof item === 'number' && Number.isFinite(item)) return;
+              if (typeof item === 'string') {
+                  chars += item.length;
+                  if (chars > limits.maxMessageChars) throw new Error('Runtime message is too large.');
+                  return;
+              }
+              if (typeof item !== 'object' || seen.has(item)) throw new Error('Runtime messages must contain JSON data only.');
+              if (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
+                  throw new Error('Runtime messages must contain plain objects only.');
+              }
+              if (Array.isArray(item) && item.length > 4096) throw new Error('Runtime array is too large.');
+              seen.add(item);
+              const keys = Object.keys(item);
+              if (keys.length > 4096) throw new Error('Runtime message is too complex.');
+              for (const key of keys) {
+                  if (['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'toJSON', 'toLocaleString'].includes(key)) {
+                      throw new Error('Unsafe key in runtime message.');
+                  }
+                  chars += key.length;
+                  if (chars > limits.maxMessageChars) throw new Error('Runtime message is too large.');
+                  const descriptor = Object.getOwnPropertyDescriptor(item, key);
+                  if (!descriptor || !('value' in descriptor)) throw new Error('Runtime message accessors are not allowed.');
+                  visit(descriptor.value, depth + 1);
+              }
+              seen.delete(item);
+          };
+          visit(value, 0);
+          const json = JSON.stringify(value);
+          if (typeof json !== 'string' || json.length > limits.maxMessageChars) throw new Error('Runtime message is too large.');
+          return json;
+      }
+  
+      static decodeValue(json, limits = this.defaultLimits) {
+          if (typeof json !== 'string' || json.length > limits.maxMessageChars) throw new Error('Invalid runtime message.');
+          const value = JSON.parse(json);
+          this.encodeValue(value, limits);
+          return value;
+      }
+  
+      static validateCommand(command) {
+          if (!command || typeof command !== 'object' || Array.isArray(command)) throw new Error('Invalid component command.');
+          const schemas = {
+              send: ['channel', 'value'],
+              'send-targeted': ['sourceChannel', 'targetComponent', 'targetChannel', 'value'],
+              set: ['property', 'value'],
+              trigger: ['trigger'],
+              'set-timer-interval': ['timer', 'intervalms'],
+              log: ['value'],
+              ping: [],
+          };
+          if (typeof command.command !== 'string' || !Object.prototype.hasOwnProperty.call(schemas, command.command)) {
+              throw new Error('Unknown component command.');
+          }
+          const fields = schemas[command.command];
+          const keys = Object.keys(command);
+          if (keys.length !== fields.length + 1 || !keys.includes('command') || fields.some((key) => !keys.includes(key))) {
+              throw new Error('Invalid component command fields.');
+          }
+          for (const key of fields) {
+              if (key === 'value') continue;
+              if (key === 'intervalms') {
+                  if (!['number', 'string'].includes(typeof command[key])) throw new Error('Invalid timer interval.');
+                  const interval = Number(command[key]);
+                  if (!Number.isFinite(interval) || interval < 10 || interval > 2147483647) {
+                      throw new Error('Component timer intervals must be between 10 and 2147483647 ms.');
+                  }
+                  continue;
+              }
+              if (typeof command[key] !== 'string' || command[key].length > 1024) throw new Error('Invalid component command name.');
+          }
+          return command;
+      }
+  
+      static encodeCommand(command, limits = this.defaultLimits) {
+          const json = this.encodeValue(command, limits);
+          this.validateCommand(command);
+          return json;
+      }
+  
+      static decodeCommand(json, limits = this.defaultLimits) {
+          return this.validateCommand(this.decodeValue(json, limits));
+      }
+  }
+  </script>
   <!-- inlined from ./lib/AppSettings.js -->
   <script>
   class AppSettings {
@@ -2026,6 +2195,7 @@
       showCliWindowInToolbar: false,
       showControlPanelsWindowInToolbar: false,
       showWorkspaceSelector: false,
+      runtimeLimits: RuntimeMessageProtocol.defaultLimits,
     });
   
     constructor(logger = null, options = {}) {
@@ -2046,7 +2216,7 @@
     }
   
     static createDefaultSettings() {
-      return { ...AppSettings.defaultSettings };
+      return { ...AppSettings.defaultSettings, runtimeLimits: { ...RuntimeMessageProtocol.defaultLimits } };
     }
   
     static normalizeSettings(settings) {
@@ -2066,6 +2236,7 @@
         showCliWindowInToolbar: settings?.showCliWindowInToolbar === true,
         showControlPanelsWindowInToolbar: settings?.showControlPanelsWindowInToolbar === true,
         showWorkspaceSelector,
+        runtimeLimits: RuntimeMessageProtocol.normalizeLimits(settings?.runtimeLimits),
       };
     }
   
@@ -2087,7 +2258,7 @@
     }
   
     getSettings() {
-      return { ...this.settings };
+      return { ...this.settings, runtimeLimits: { ...this.settings.runtimeLimits } };
     }
   
     getHighlightingSettings() {
@@ -2118,9 +2289,15 @@
       const normalizedSettings = AppSettings.normalizeSettings({
         ...this.settings,
         ...(settings ?? {}),
+        runtimeLimits: {
+          ...this.settings.runtimeLimits,
+          ...(settings?.runtimeLimits ?? {}),
+        },
       });
       const didChange = Object.keys(normalizedSettings).some(
-        (key) => this.settings[key] !== normalizedSettings[key],
+        (key) => key === 'runtimeLimits'
+          ? Object.keys(normalizedSettings.runtimeLimits).some(limit => this.settings.runtimeLimits?.[limit] !== normalizedSettings.runtimeLimits[limit])
+          : this.settings[key] !== normalizedSettings[key],
       );
       if (!didChange) return false;
   
@@ -7028,108 +7205,6 @@
       }
   }
   </script>
-  <!-- inlined from ./lib/Code/RuntimeMessageProtocol.js -->
-  <script>
-  // Only bounded JSON data crosses the boundary between a model and the UI.
-  // This class is also copied into the trusted sandbox bridge's separate realm.
-  class RuntimeMessageProtocol {
-      static maxMessageChars = 65536;
-      static maxScriptChars = 1024 * 1024;
-      static maxPendingMessages = 256;
-      static maxMessagesPerSecond = 500;
-      static maxCharsPerSecond = 1024 * 1024;
-  
-      static encodeValue(value) {
-          let nodes = 0;
-          let chars = 0;
-          const seen = new Set();
-          const visit = (item, depth) => {
-              if (++nodes > 4096 || depth > 16) throw new Error('Runtime message is too complex.');
-              if (item === null || typeof item === 'boolean') return;
-              if (typeof item === 'number' && Number.isFinite(item)) return;
-              if (typeof item === 'string') {
-                  chars += item.length;
-                  if (chars > this.maxMessageChars) throw new Error('Runtime message is too large.');
-                  return;
-              }
-              if (typeof item !== 'object' || seen.has(item)) throw new Error('Runtime messages must contain JSON data only.');
-              if (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
-                  throw new Error('Runtime messages must contain plain objects only.');
-              }
-              if (Array.isArray(item) && item.length > 4096) throw new Error('Runtime array is too large.');
-              seen.add(item);
-              const keys = Object.keys(item);
-              if (keys.length > 4096) throw new Error('Runtime message is too complex.');
-              for (const key of keys) {
-                  if (['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'toJSON', 'toLocaleString'].includes(key)) {
-                      throw new Error('Unsafe key in runtime message.');
-                  }
-                  chars += key.length;
-                  if (chars > this.maxMessageChars) throw new Error('Runtime message is too large.');
-                  const descriptor = Object.getOwnPropertyDescriptor(item, key);
-                  if (!descriptor || !('value' in descriptor)) throw new Error('Runtime message accessors are not allowed.');
-                  visit(descriptor.value, depth + 1);
-              }
-              seen.delete(item);
-          };
-          visit(value, 0);
-          const json = JSON.stringify(value);
-          if (typeof json !== 'string' || json.length > this.maxMessageChars) throw new Error('Runtime message is too large.');
-          return json;
-      }
-  
-      static decodeValue(json) {
-          if (typeof json !== 'string' || json.length > this.maxMessageChars) throw new Error('Invalid runtime message.');
-          const value = JSON.parse(json);
-          this.encodeValue(value);
-          return value;
-      }
-  
-      static validateCommand(command) {
-          if (!command || typeof command !== 'object' || Array.isArray(command)) throw new Error('Invalid component command.');
-          const schemas = {
-              send: ['channel', 'value'],
-              'send-targeted': ['sourceChannel', 'targetComponent', 'targetChannel', 'value'],
-              set: ['property', 'value'],
-              trigger: ['trigger'],
-              'set-timer-interval': ['timer', 'intervalms'],
-              log: ['value'],
-              ping: [],
-          };
-          if (typeof command.command !== 'string' || !Object.prototype.hasOwnProperty.call(schemas, command.command)) {
-              throw new Error('Unknown component command.');
-          }
-          const fields = schemas[command.command];
-          const keys = Object.keys(command);
-          if (keys.length !== fields.length + 1 || !keys.includes('command') || fields.some((key) => !keys.includes(key))) {
-              throw new Error('Invalid component command fields.');
-          }
-          for (const key of fields) {
-              if (key === 'value') continue;
-              if (key === 'intervalms') {
-                  if (!['number', 'string'].includes(typeof command[key])) throw new Error('Invalid timer interval.');
-                  const interval = Number(command[key]);
-                  if (!Number.isFinite(interval) || interval < 10 || interval > 2147483647) {
-                      throw new Error('Component timer intervals must be between 10 and 2147483647 ms.');
-                  }
-                  continue;
-              }
-              if (typeof command[key] !== 'string' || command[key].length > 1024) throw new Error('Invalid component command name.');
-          }
-          return command;
-      }
-  
-      static encodeCommand(command) {
-          const json = this.encodeValue(command);
-          this.validateCommand(command);
-          return json;
-      }
-  
-      static decodeCommand(json) {
-          return this.validateCommand(this.decodeValue(json));
-      }
-  }
-  </script>
   <!-- inlined from ./lib/Code/SandboxedWorkerHost.js -->
   <script>
   class SandboxedWorkerHost {
@@ -7138,7 +7213,9 @@
       static sandboxPolicy = "default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; worker-src blob:; child-src blob:; frame-src 'none'; img-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
       static globalBudget = { since: 0, messages: 0, chars: 0 };
   
-      constructor(script) {
+      constructor(script, options = {}) {
+          this.limits = RuntimeMessageProtocol.normalizeLimits(options.limits);
+          this.budget = options.budget;
           if (typeof script !== 'string' || script.length > RuntimeMessageProtocol.maxScriptChars) {
               throw new Error('Component runtime exceeds the 1 MiB script limit.');
           }
@@ -7168,6 +7245,7 @@
               this.connected = true;
               this.frame.contentWindow.postMessage({
                   type: 'jigbox-init',
+                  limits: this.limits,
                   script: `(function ${SandboxedWorkerHost.prepareWorker.toString()})();\n${script}`,
               }, '*', [channel.port2]);
           };
@@ -7226,6 +7304,7 @@
               let messages = 0;
               let chars = 0;
               let logs = 0;
+              let limits;
               const stop = (message) => {
                   if (stopped) return;
                   stopped = true;
@@ -7242,6 +7321,7 @@
                   port.close();
               };
               try {
+                  limits = Protocol.normalizeLimits(event.data.limits);
                   if (window.origin !== 'null') throw new Error('Sandbox isolation could not be verified.');
                   if (typeof event.data.script !== 'string' || event.data.script.length > Protocol.maxScriptChars + 8192) {
                       throw new Error('Invalid component script.');
@@ -7256,11 +7336,11 @@
                       try {
                           const now = Date.now();
                           if (now - since >= 1000) { since = now; messages = 0; chars = 0; logs = 0; }
-                          if (++messages > Protocol.maxMessagesPerSecond) throw new Error('Component message rate limit exceeded.');
-                          const json = Protocol.encodeCommand(message.data);
-                          if (message.data.command === 'log' && ++logs > 20) throw new Error('Component log rate limit exceeded.');
+                          if (++messages > limits.maxMessagesPerSecond) throw new Error('Component message rate limit exceeded.');
+                          const json = Protocol.encodeCommand(message.data, limits);
+                          if (message.data.command === 'log' && ++logs > limits.maxLogsPerSecond) throw new Error('Component log rate limit exceeded.');
                           chars += json.length;
-                          if (chars > Protocol.maxCharsPerSecond) throw new Error('Component message volume limit exceeded.');
+                          if (chars > limits.maxCharsPerSecond) throw new Error('Component message volume limit exceeded.');
                           port.postMessage({ type: 'command', json });
                       } catch (error) { stop(error.message); }
                   };
@@ -7295,7 +7375,7 @@
                       if (stopped) return;
                       try {
                           if (message.data?.type !== 'input') throw new Error('Invalid runtime input.');
-                          worker.postMessage(Protocol.decodeValue(message.data.json));
+                          worker.postMessage(Protocol.decodeValue(message.data.json, limits));
                       } catch (error) { stop(error.message); }
                   };
               } catch (error) { stop('Isolated worker startup failed. Execution was blocked.'); }
@@ -7318,37 +7398,36 @@
                   return;
               }
               if (data?.type !== 'command') throw new Error('Invalid sandbox response.');
-              SandboxedWorkerHost.consumeBudget(data.json);
-              const command = RuntimeMessageProtocol.decodeCommand(data.json);
+              SandboxedWorkerHost.consumeBudget(data.json, this.limits, this.budget);
+              const command = RuntimeMessageProtocol.decodeCommand(data.json, this.limits);
               if (command.command === 'log') {
-                  const budget = SandboxedWorkerHost.globalBudget;
+                  const budget = this.budget ?? SandboxedWorkerHost.globalBudget;
                   budget.logs = (budget.logs ?? 0) + 1;
-                  if (budget.logs > 64) throw new Error('Simulation log rate limit exceeded.');
+                  if (budget.logs > (this.limits ?? RuntimeMessageProtocol.defaultLimits).maxSimulationLogsPerSecond) throw new Error('Simulation log rate limit exceeded.');
               }
               this.onmessage?.({ data: command });
           } catch (error) { this.fail(error.message); }
       }
   
-      static consumeBudget(json) {
-          const budget = this.globalBudget;
+      static consumeBudget(json, limits = RuntimeMessageProtocol.defaultLimits, budget = this.globalBudget) {
           const now = Date.now();
           if (now - budget.since >= 1000) { budget.since = now; budget.messages = 0; budget.chars = 0; budget.logs = 0; }
-          if (++budget.messages > 2000) throw new Error('Simulation message rate limit exceeded.');
-          if (typeof json !== 'string' || json.length > RuntimeMessageProtocol.maxMessageChars) throw new Error('Invalid component message.');
+          if (++budget.messages > limits.maxSimulationMessagesPerSecond) throw new Error('Simulation message rate limit exceeded.');
+          if (typeof json !== 'string' || json.length > limits.maxMessageChars) throw new Error('Invalid component message.');
           budget.chars += json.length;
-          if (budget.chars > 2 * RuntimeMessageProtocol.maxCharsPerSecond) throw new Error('Simulation message volume limit exceeded.');
+          if (budget.chars > limits.maxSimulationCharsPerSecond) throw new Error('Simulation message volume limit exceeded.');
       }
   
       postMessage(message) {
           if (this.isTerminated) return;
           try {
-              const json = RuntimeMessageProtocol.encodeValue(message);
-              SandboxedWorkerHost.consumeBudget(json);
+              const json = RuntimeMessageProtocol.encodeValue(message, this.limits);
+              SandboxedWorkerHost.consumeBudget(json, this.limits, this.budget);
               if (this.isReady) {
                   this.port.postMessage({ type: 'input', json });
                   return;
               }
-              if (this.pendingMessages.length >= RuntimeMessageProtocol.maxPendingMessages) throw new Error('Component startup input queue limit exceeded.');
+              if (this.pendingMessages.length >= (this.limits ?? RuntimeMessageProtocol.defaultLimits).maxPendingMessages) throw new Error('Component startup input queue limit exceeded.');
               this.pendingMessages.push(json);
           } catch (error) { this.fail(error.message); }
       }
@@ -7383,12 +7462,14 @@
   
       listenerKey = 'component-worker';
   
-      constructor(component, logger) {
+      constructor(component, logger, options = {}) {
           this.isRunning = false;
           this.hasStarted = false;
           this.pendingCommands = [];
           this.component = component;
           this.logger = logger;
+          this.runtimeLimits = RuntimeMessageProtocol.normalizeLimits(options.limits);
+          this.runtimeBudget = options.budget;
           this.runtimeScript = this.buildRuntimeScript(component);
           this.runtimeMode = 'sandboxed-worker';
           this.webWorker = this.createExecutionHost(this.runtimeScript);
@@ -7398,7 +7479,7 @@
                   return;
               }
               if (this.hasStarted !== true) {
-                  if (this.pendingCommands.length >= RuntimeMessageProtocol.maxPendingMessages) {
+                  if (this.pendingCommands.length >= this.runtimeLimits.maxPendingMessages) {
                       this.handleRuntimeError({ message: 'Component startup command queue limit exceeded.' });
                       return;
                   }
@@ -7448,12 +7529,12 @@
       }
   
       executeOutboundCommand(commandData) {
-          const cmd = new OutboundCommand(this.component, commandData, this.logger);
+          const cmd = new OutboundCommand(this.component, commandData, this.logger, this.runtimeLimits);
           cmd.execute();
       }
   
       createExecutionHost(script) {
-          return new SandboxedWorkerHost(script);
+          return new SandboxedWorkerHost(script, { limits: this.runtimeLimits, budget: this.runtimeBudget });
       }
   
       buildRuntimeScript(component) {
@@ -7592,14 +7673,15 @@
   <script>
   class OutboundCommand {
   
-      constructor(component, command, logger) {
+      constructor(component, command, logger, limits = RuntimeMessageProtocol.defaultLimits) {
           this.logger = logger;
           this.component = component;
           this.command = command;
+          this.limits = limits;
       }
   
       execute() {
-          RuntimeMessageProtocol.encodeCommand(this.command);
+          RuntimeMessageProtocol.encodeCommand(this.command, this.limits);
           if (this.command.command === 'send') {
               const channel = this.component.getChannel(this.command.channel);
               if (channel) {
@@ -7752,10 +7834,12 @@
               return false;
           }
           this.captureStartState();
+          const limits = RuntimeMessageProtocol.normalizeLimits(this.workspace.appSettings?.getSettings?.()?.runtimeLimits);
+          const budget = { since: Date.now(), messages: 0, chars: 0, logs: 0 };
           this.setRunState(ExecutionEnvironment.runStateRunning);
           try {
               for (const component of components) {
-                  this.componentWorkers.push(new ComponentWorker(component, this.componentCodeLogger));
+                  this.componentWorkers.push(new ComponentWorker(component, this.componentCodeLogger, { limits, budget }));
               }
               this.componentWorkers.forEach((w) => w.start());
               return true;
@@ -22407,6 +22491,12 @@
           this.setSectionCardTitle(this.canvasSettingsCard, this.t('settings.canvas'));
           this.setSectionCardTitle(this.highlightingSettingsCard, this.t('settings.highlighting'));
           this.setSectionCardTitle(this.featureGatesSettingsCard, this.t('settings.featureGates'));
+          this.setSectionCardTitle(this.runtimeLimitsSettingsCard, this.t('settings.runtimeLimits'));
+          if (this.runtimeLimitsDescription) this.runtimeLimitsDescription.innerText = this.t('settings.runtimeLimitsDescription');
+          if (this.runtimeLimitsResetButton) this.runtimeLimitsResetButton.innerText = this.t('settings.runtimeLimitsReset');
+          Object.entries(this.runtimeLimitSettings ?? {}).forEach(([key, setting]) => {
+              setting.setLabels(this.t(`settings.runtime.${key}`), this.t(`settings.runtime.${key}Description`));
+          });
           this.setSectionCardTitle(this.factoryResetSettingsCard, this.t('settings.factoryReset'));
           this.setSectionCardTitle(this.browserLibraryCard, this.t('library.savedLibraries'));
           this.setSectionCardTitle(this.persistenceProjectDataCard, this.t('persistence.projectData'));
@@ -22506,6 +22596,12 @@
               this.t('settings.factoryResetDescription'),
               this.t('settings.factoryResetButton'),
           );
+          if (this.settingsSearchInput) {
+              this.settingsSearchInput.placeholder = this.t('settings.searchPlaceholder');
+              this.settingsSearchInput.setAttribute('aria-label', this.t('settings.searchLabel'));
+          }
+          if (this.settingsSearchEmptyState) this.settingsSearchEmptyState.innerText = this.t('settings.noSearchMatches');
+          this.applySettingsSearch();
   
           if (this.projectLibraryTabButton) {
               this.projectLibraryTabButton.innerText = this.t('library.projectLibraries');
@@ -22655,6 +22751,24 @@
       buildSettingsPanel() {
           const settingsPanelItem = this.settingsPanel.addPanelItem('settings');
           const shell = this.panelHelper.createElement('div', 'dp-stack dp-panel-scroll-shell');
+          shell.id = 'dp-settings-search-results';
+          this.settingsSearchInput = this.panelHelper.createElement('input', 'dp-input dp-settings-search');
+          this.settingsSearchInput.type = 'search';
+          this.settingsSearchInput.autocomplete = 'off';
+          this.settingsSearchInput.placeholder = this.t('settings.searchPlaceholder');
+          this.settingsSearchInput.setAttribute('aria-label', this.t('settings.searchLabel'));
+          this.settingsSearchInput.setAttribute('aria-controls', shell.id);
+          this.settingsSearchInput.addEventListener('input', () => this.applySettingsSearch());
+          this.settingsSearchInput.addEventListener('keydown', (event) => {
+              if (event.key !== 'Escape' || !this.settingsSearchInput.value) return;
+              this.settingsSearchInput.value = '';
+              this.applySettingsSearch();
+              event.preventDefault();
+              event.stopPropagation();
+          });
+          this.settingsSearchEmptyState = this.panelHelper.createElement('div', 'dp-empty-state');
+          this.settingsSearchEmptyState.innerText = this.t('settings.noSearchMatches');
+          this.settingsSearchEmptyState.setAttribute('role', 'status');
           const displayCard = this.panelHelper.createSectionCard(this.t('settings.display'));
           this.displaySettingsCard = displayCard;
   
@@ -22694,16 +22808,42 @@
           this.startupSettingsCard = this.buildStartupCard();
           this.canvasSettingsCard = this.buildCanvasInteractionCard();
           this.highlightingSettingsCard = this.buildHighlightingCard();
+          this.runtimeLimitsSettingsCard = this.buildRuntimeLimitsCard();
           this.featureGatesSettingsCard = this.buildFeatureGatesCard();
           this.factoryResetSettingsCard = this.buildFactoryResetCard();
   
-          shell.appendChild(displayCard.element);
-          shell.appendChild(this.startupSettingsCard.element);
-          shell.appendChild(this.canvasSettingsCard.element);
-          shell.appendChild(this.highlightingSettingsCard.element);
-          shell.appendChild(this.featureGatesSettingsCard.element);
-          shell.appendChild(this.factoryResetSettingsCard.element);
+          this.settingsSearchCards = [displayCard, this.startupSettingsCard, this.canvasSettingsCard,
+              this.highlightingSettingsCard, this.runtimeLimitsSettingsCard, this.featureGatesSettingsCard,
+              this.factoryResetSettingsCard];
+          this.settingsSearchCards.forEach(card => shell.appendChild(card.element));
+          shell.appendChild(this.settingsSearchEmptyState);
+          settingsPanelItem.appendChild(this.settingsSearchInput);
           settingsPanelItem.appendChild(shell);
+          this.applySettingsSearch();
+      }
+  
+      applySettingsSearch() {
+          if (!this.settingsSearchCards) return;
+          const normalize = (text) => String(text ?? '').normalize('NFKD')
+              .replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss').toLowerCase();
+          const terms = normalize(this.settingsSearchInput?.value).trim().split(/\s+/).filter(Boolean);
+          const matches = (text) => terms.every(term => normalize(text).includes(term));
+          let visibleCards = 0;
+          for (const card of this.settingsSearchCards) {
+              const title = card.element.querySelector('.dp-section-title')?.textContent ?? '';
+              const children = Array.from(card.body.children);
+              const rows = children.filter(child => child.classList.contains('dp-settings-row'));
+              const sharedText = children.filter(child => !rows.includes(child)).map(child => child.textContent).join(' ');
+              const sectionMatches = matches(`${title} ${sharedText}`);
+              let visibleRows = 0;
+              for (const row of rows) {
+                  row.hidden = !sectionMatches && !matches(`${title} ${row.textContent}`);
+                  if (!row.hidden) visibleRows++;
+              }
+              card.element.hidden = !sectionMatches && visibleRows === 0;
+              if (!card.element.hidden) visibleCards++;
+          }
+          if (this.settingsSearchEmptyState) this.settingsSearchEmptyState.hidden = visibleCards > 0;
       }
   
       buildLibraryPanel() {
@@ -24037,6 +24177,62 @@
           return featureGatesCard;
       }
   
+      buildRuntimeLimitsCard() {
+          const card = this.panelHelper.createSectionCard(this.t('settings.runtimeLimits'));
+          this.runtimeLimitsDescription = this.panelHelper.createElement('div', 'dp-settings-description');
+          this.runtimeLimitsDescription.innerText = this.t('settings.runtimeLimitsDescription');
+          card.body.appendChild(this.runtimeLimitsDescription);
+          this.runtimeLimitSettings = {};
+          for (const [key, definition] of Object.entries(RuntimeMessageProtocol.limitDefinitions)) {
+              const row = this.panelHelper.createElement('div', 'dp-settings-row');
+              const copy = this.panelHelper.createElement('div', 'dp-settings-copy');
+              const heading = this.panelHelper.createElement('label', 'dp-settings-title');
+              const description = this.panelHelper.createElement('div', 'dp-settings-description');
+              const controls = this.panelHelper.createElement('div', 'dp-settings-control');
+              const input = this.panelHelper.createElement('input', 'dp-input dp-settings-number');
+              input.id = `dp-runtime-${key}`;
+              input.type = 'number';
+              input.min = String(definition.min);
+              input.max = String(definition.max);
+              input.step = '1';
+              input.required = true;
+              heading.htmlFor = input.id;
+              description.id = `${input.id}-description`;
+              input.setAttribute('aria-describedby', description.id);
+              input.addEventListener('change', () => {
+                  if (!input.checkValidity()) {
+                      input.reportValidity();
+                      return;
+                  }
+                  this.appSettings.setSettings({ runtimeLimits: { [key]: input.valueAsNumber } });
+              });
+              const setting = {
+                  input,
+                  setValue: (value) => { input.value = String(value); },
+                  setLabels: (title, text) => {
+                      heading.innerText = title;
+                      description.innerText = text;
+                      input.setAttribute('aria-label', title);
+                  },
+              };
+              setting.setLabels(this.t(`settings.runtime.${key}`), this.t(`settings.runtime.${key}Description`));
+              setting.setValue(this.appSettings.getSettings().runtimeLimits[key]);
+              this.runtimeLimitSettings[key] = setting;
+              copy.appendChild(heading);
+              copy.appendChild(description);
+              controls.appendChild(input);
+              row.appendChild(copy);
+              row.appendChild(controls);
+              card.body.appendChild(row);
+          }
+          this.runtimeLimitsResetButton = this.panelHelper.makeButton('light', this.t('settings.runtimeLimitsReset'), () => {
+              this.appSettings.setSettings({ runtimeLimits: RuntimeMessageProtocol.defaultLimits });
+          });
+          this.runtimeLimitsResetButton.type = 'button';
+          card.body.appendChild(this.runtimeLimitsResetButton);
+          return card;
+      }
+  
       buildFactoryResetCard() {
           const factoryResetCard = this.panelHelper.createSectionCard(this.t('settings.factoryReset'));
   
@@ -24991,6 +25187,7 @@
           const nextSettings = AppSettings.normalizeSettings(
               settings ?? this.appSettings?.getSettings?.() ?? AppSettings.createDefaultSettings(),
           );
+          this.syncRuntimeLimitsUi(nextSettings);
           this.showIntroPageOnStartupToggle?.toggle?.setChecked?.(nextSettings.showIntroPageOnStartup === true);
           this.gridSnappingToggle?.toggle?.setChecked?.(nextSettings.enableGridSnapping === true);
           this.componentHighlightingToggle?.toggle?.setChecked?.(nextSettings.enableComponentHighlighting === true);
@@ -25009,6 +25206,13 @@
           this.languageSetting?.setValue?.(nextSettings.language);
           this.themeModeSetting?.setValue?.(themeMode);
           this.interfaceScaleSetting?.setValue?.(interfaceScale);
+      }
+  
+      syncRuntimeLimitsUi(settings = null) {
+          const limits = RuntimeMessageProtocol.normalizeLimits(
+              (settings ?? this.appSettings.getSettings()).runtimeLimits,
+          );
+          Object.entries(this.runtimeLimitSettings ?? {}).forEach(([key, setting]) => setting.setValue(limits[key]));
       }
   
       isProjectDataPanelEnabled(settings = null) {
@@ -35090,6 +35294,10 @@
       border-bottom: 1px solid var(--panel-line);
     }
 
+    .dp-settings-search {
+      flex: 0 0 auto;
+    }
+
     .dp-settings-row:last-child {
       border-bottom: 0;
       padding-bottom: 0;
@@ -35164,6 +35372,12 @@
 
     .dp-settings-row-stacked .dp-settings-choice-group {
       justify-content: flex-start;
+    }
+
+    .dp-settings-number {
+      width: 150px;
+      min-width: 120px;
+      text-align: right;
     }
 
     .dp-settings-select {
@@ -37600,7 +37814,7 @@
       }
     }
   </style>
-  <meta name="jigbox-build-version" content="5">
+  <meta name="jigbox-build-version" content="9">
 </head>
 
 <body>
