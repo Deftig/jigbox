@@ -4,8 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- Component simulations use blob scripts; allow them in script-src as well as worker-src. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'">
+  <!-- Trusted sandbox bootstrap uses inline scripts; model code runs only in isolated workers. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 
   <!-- inlined from ./lib/Konva/konva.min.js -->
   <script>
@@ -669,7 +669,7 @@
   
     startExecution() {
       const previousRunState = this.executionEnvironment.getRunState();
-      this.executionEnvironment.start();
+      if (this.executionEnvironment.start() === false) return;
       if (
         previousRunState !== ExecutionEnvironment.runStateStopped
         && previousRunState !== ExecutionEnvironment.runStatePaused
@@ -7028,167 +7028,357 @@
       }
   }
   </script>
-  <!-- inlined from ./lib/Code/ComponentWorker.js -->
+  <!-- inlined from ./lib/Code/RuntimeMessageProtocol.js -->
   <script>
-  class InlineWorkerHost {
+  // Only bounded JSON data crosses the boundary between a model and the UI.
+  // This class is also copied into the trusted sandbox bridge's separate realm.
+  class RuntimeMessageProtocol {
+      static maxMessageChars = 65536;
+      static maxScriptChars = 1024 * 1024;
+      static maxPendingMessages = 256;
+      static maxMessagesPerSecond = 500;
+      static maxCharsPerSecond = 1024 * 1024;
+  
+      static encodeValue(value) {
+          let nodes = 0;
+          let chars = 0;
+          const seen = new Set();
+          const visit = (item, depth) => {
+              if (++nodes > 4096 || depth > 16) throw new Error('Runtime message is too complex.');
+              if (item === null || typeof item === 'boolean') return;
+              if (typeof item === 'number' && Number.isFinite(item)) return;
+              if (typeof item === 'string') {
+                  chars += item.length;
+                  if (chars > this.maxMessageChars) throw new Error('Runtime message is too large.');
+                  return;
+              }
+              if (typeof item !== 'object' || seen.has(item)) throw new Error('Runtime messages must contain JSON data only.');
+              if (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
+                  throw new Error('Runtime messages must contain plain objects only.');
+              }
+              if (Array.isArray(item) && item.length > 4096) throw new Error('Runtime array is too large.');
+              seen.add(item);
+              const keys = Object.keys(item);
+              if (keys.length > 4096) throw new Error('Runtime message is too complex.');
+              for (const key of keys) {
+                  if (['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'toJSON', 'toLocaleString'].includes(key)) {
+                      throw new Error('Unsafe key in runtime message.');
+                  }
+                  chars += key.length;
+                  if (chars > this.maxMessageChars) throw new Error('Runtime message is too large.');
+                  const descriptor = Object.getOwnPropertyDescriptor(item, key);
+                  if (!descriptor || !('value' in descriptor)) throw new Error('Runtime message accessors are not allowed.');
+                  visit(descriptor.value, depth + 1);
+              }
+              seen.delete(item);
+          };
+          visit(value, 0);
+          const json = JSON.stringify(value);
+          if (typeof json !== 'string' || json.length > this.maxMessageChars) throw new Error('Runtime message is too large.');
+          return json;
+      }
+  
+      static decodeValue(json) {
+          if (typeof json !== 'string' || json.length > this.maxMessageChars) throw new Error('Invalid runtime message.');
+          const value = JSON.parse(json);
+          this.encodeValue(value);
+          return value;
+      }
+  
+      static validateCommand(command) {
+          if (!command || typeof command !== 'object' || Array.isArray(command)) throw new Error('Invalid component command.');
+          const schemas = {
+              send: ['channel', 'value'],
+              'send-targeted': ['sourceChannel', 'targetComponent', 'targetChannel', 'value'],
+              set: ['property', 'value'],
+              trigger: ['trigger'],
+              'set-timer-interval': ['timer', 'intervalms'],
+              log: ['value'],
+              ping: [],
+          };
+          if (typeof command.command !== 'string' || !Object.prototype.hasOwnProperty.call(schemas, command.command)) {
+              throw new Error('Unknown component command.');
+          }
+          const fields = schemas[command.command];
+          const keys = Object.keys(command);
+          if (keys.length !== fields.length + 1 || !keys.includes('command') || fields.some((key) => !keys.includes(key))) {
+              throw new Error('Invalid component command fields.');
+          }
+          for (const key of fields) {
+              if (key === 'value') continue;
+              if (key === 'intervalms') {
+                  if (!['number', 'string'].includes(typeof command[key])) throw new Error('Invalid timer interval.');
+                  const interval = Number(command[key]);
+                  if (!Number.isFinite(interval) || interval < 10 || interval > 2147483647) {
+                      throw new Error('Component timer intervals must be between 10 and 2147483647 ms.');
+                  }
+                  continue;
+              }
+              if (typeof command[key] !== 'string' || command[key].length > 1024) throw new Error('Invalid component command name.');
+          }
+          return command;
+      }
+  
+      static encodeCommand(command) {
+          const json = this.encodeValue(command);
+          this.validateCommand(command);
+          return json;
+      }
+  
+      static decodeCommand(json) {
+          return this.validateCommand(this.decodeValue(json));
+      }
+  }
+  </script>
+  <!-- inlined from ./lib/Code/SandboxedWorkerHost.js -->
+  <script>
+  class SandboxedWorkerHost {
+      // No allow-same-origin: neither the bridge nor its worker shares the app's
+      // origin/storage. Only trusted bridge code is ever inserted into srcdoc.
+      static sandboxPolicy = "default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; worker-src blob:; child-src blob:; frame-src 'none'; img-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+      static globalBudget = { since: 0, messages: 0, chars: 0 };
   
       constructor(script) {
-          this.script = script;
-          this._onmessage = null;
-          this._onerror = null;
+          if (typeof script !== 'string' || script.length > RuntimeMessageProtocol.maxScriptChars) {
+              throw new Error('Component runtime exceeds the 1 MiB script limit.');
+          }
+          if (typeof MessageChannel !== 'function' || typeof Worker !== 'function' || typeof document === 'undefined' || !document.createElement) {
+              throw new Error('This browser cannot provide isolated component execution.');
+          }
+          this.onmessage = null;
+          this.onerror = null;
           this.onmessageerror = null;
-          this.pendingOutboundEvents = [];
-          this.pendingErrorEvents = [];
           this.isTerminated = false;
-          this.scope = this.createScope();
-          this.executeScript();
-      }
-  
-      get onmessage() {
-          return this._onmessage;
-      }
-  
-      set onmessage(handler) {
-          this._onmessage = typeof handler === 'function' ? handler : null;
-          this.flushPendingOutboundEvents();
-      }
-  
-      get onerror() {
-          return this._onerror;
-      }
-  
-      set onerror(handler) {
-          this._onerror = typeof handler === 'function' ? handler : null;
-          this.flushPendingErrorEvents();
-      }
-  
-      createScope() {
-          const scope = {};
-          [
-              'AbortController',
-              'AbortSignal',
-              'Array',
-              'Blob',
-              'Boolean',
-              'Date',
-              'Error',
-              'fetch',
-              'Headers',
-              'JSON',
-              'Map',
-              'Math',
-              'Number',
-              'Object',
-              'performance',
-              'Promise',
-              'Request',
-              'Response',
-              'RegExp',
-              'Set',
-              'String',
-              'structuredClone',
-              'Symbol',
-              'TextDecoder',
-              'TextEncoder',
-              'TypeError',
-              'URL',
-              'URLSearchParams',
-              'WeakMap',
-              'WeakSet',
-              'clearInterval',
-              'clearTimeout',
-              'console',
-              'crypto',
-              'queueMicrotask',
-              'setInterval',
-              'setTimeout',
-          ].forEach((name) => {
-              if (name in globalThis) {
-                  scope[name] = globalThis[name];
-              }
-          });
-  
-          scope.globalThis = scope;
-          scope.self = scope;
-          scope.window = scope;
-          scope.onmessage = null;
-          scope.postMessage = (message) => {
-              if (this.isTerminated) return;
-              this.dispatchOutboundEvent({ data: message });
+          this.isReady = false;
+          this.pendingMessages = [];
+          this.frame = document.createElement('iframe');
+          this.frame.setAttribute('sandbox', 'allow-scripts');
+          this.frame.setAttribute('referrerpolicy', 'no-referrer');
+          this.frame.setAttribute('aria-hidden', 'true');
+          this.frame.title = 'Isolated component runtime';
+          this.frame.hidden = true;
+          this.frame.srcdoc = SandboxedWorkerHost.createSandboxDocument();
+          const channel = new MessageChannel();
+          this.port = channel.port1;
+          this.port.onmessage = (event) => this.receive(event.data);
+          this.port.onmessageerror = () => this.fail('Invalid sandbox message.');
+          this.startupTimeout = setTimeout(() => this.fail('Isolated worker startup timed out. Execution was blocked.'), 10000);
+          this.frame.onload = () => {
+              if (this.isTerminated || this.connected) return;
+              this.connected = true;
+              this.frame.contentWindow.postMessage({
+                  type: 'jigbox-init',
+                  script: `(function ${SandboxedWorkerHost.prepareWorker.toString()})();\n${script}`,
+              }, '*', [channel.port2]);
           };
-          return scope;
+          this.unconnectedPort = channel.port2;
+          try {
+              document.body.appendChild(this.frame);
+          } catch (error) {
+              this.terminate();
+              throw error;
+          }
       }
   
-      executeScript() {
+      static createSandboxDocument() {
+          const bootstrap = `(function ${this.runBridge.toString()})(${RuntimeMessageProtocol.toString()});`;
+          return '<!doctype html><html><head><meta charset="utf-8">'
+              + `<meta http-equiv="Content-Security-Policy" content="${this.sandboxPolicy}">`
+              + '<meta name="referrer" content="no-referrer">'
+              + '<' + 'script>' + bootstrap + '<' + '/script></head><body></body></html>';
+      }
+  
+      static prepareWorker() {
+          // These are defence in depth. The opaque origin and inherited CSP are
+          // the security boundary, including if model code tampers with globals.
+          if (self.origin !== 'null') throw new Error('Worker isolation could not be verified.');
+          const listen = self.addEventListener.bind(self);
+          const stopEvent = Event.prototype.stopImmediatePropagation;
+          listen('message', function connect(event) {
+              if (event.data !== 'jigbox-control' || event.ports.length !== 1) return;
+              stopEvent.call(event);
+              const port = event.ports[0];
+              port.onmessage = () => port.postMessage('pong');
+              port.postMessage('ready');
+              self.removeEventListener('message', connect);
+          });
+          for (const name of ['Worker', 'SharedWorker', 'BroadcastChannel']) {
+              Object.defineProperty(self, name, { value: undefined, writable: false, configurable: false });
+          }
+      }
+  
+      static runBridge(Protocol) {
+          // This function runs in the frame, never in the user-code worker.
+          // Model objects are structured-cloned here before any inspection.
+          window.addEventListener('message', function initialize(event) {
+              if (event.source !== parent || event.data?.type !== 'jigbox-init' || event.ports.length !== 1) return;
+              window.removeEventListener('message', initialize);
+              const port = event.ports[0];
+              let worker;
+              let workerUrl;
+              let control;
+              let watchdog;
+              let stopped = false;
+              let ready = false;
+              let awaitingHeartbeat = true;
+              let lastBeat = Date.now();
+              let since = Date.now();
+              let messages = 0;
+              let chars = 0;
+              let logs = 0;
+              const stop = (message) => {
+                  if (stopped) return;
+                  stopped = true;
+                  clearInterval(watchdog);
+                  if (worker) {
+                      worker.onmessage = null;
+                      worker.onerror = null;
+                      worker.terminate();
+                  }
+                  control?.port1.close();
+                  control?.port2.close();
+                  if (workerUrl) URL.revokeObjectURL(workerUrl);
+                  if (message) port.postMessage({ type: 'error', message });
+                  port.close();
+              };
+              try {
+                  if (window.origin !== 'null') throw new Error('Sandbox isolation could not be verified.');
+                  if (typeof event.data.script !== 'string' || event.data.script.length > Protocol.maxScriptChars + 8192) {
+                      throw new Error('Invalid component script.');
+                  }
+                  workerUrl = URL.createObjectURL(new Blob([event.data.script], { type: 'text/javascript' }));
+                  worker = new Worker(workerUrl);
+                  worker.onerror = (error) => stop(typeof error.message === 'string'
+                      ? error.message.slice(0, 1024) : 'Component code failed inside its isolated worker.');
+                  worker.onmessageerror = () => stop('Invalid component message.');
+                  worker.onmessage = (message) => {
+                      if (stopped) return;
+                      try {
+                          const now = Date.now();
+                          if (now - since >= 1000) { since = now; messages = 0; chars = 0; logs = 0; }
+                          if (++messages > Protocol.maxMessagesPerSecond) throw new Error('Component message rate limit exceeded.');
+                          const json = Protocol.encodeCommand(message.data);
+                          if (message.data.command === 'log' && ++logs > 20) throw new Error('Component log rate limit exceeded.');
+                          chars += json.length;
+                          if (chars > Protocol.maxCharsPerSecond) throw new Error('Component message volume limit exceeded.');
+                          port.postMessage({ type: 'command', json });
+                      } catch (error) { stop(error.message); }
+                  };
+                  control = new MessageChannel();
+                  control.port1.onmessage = (heartbeat) => {
+                      if (stopped) return;
+                      if (!awaitingHeartbeat || heartbeat.data !== (ready ? 'pong' : 'ready')) {
+                          stop('Invalid component control message.');
+                          return;
+                      }
+                      awaitingHeartbeat = false;
+                      lastBeat = Date.now();
+                      if (!ready) {
+                          ready = true;
+                          URL.revokeObjectURL(workerUrl);
+                          workerUrl = null;
+                          port.postMessage({ type: 'ready' });
+                      }
+                  };
+                  worker.postMessage('jigbox-control', [control.port2]);
+                  watchdog = setInterval(() => {
+                      if (Date.now() - lastBeat > 5000) {
+                          stop('Component stopped responding; its worker was terminated.');
+                          return;
+                      }
+                      if (!awaitingHeartbeat) {
+                          awaitingHeartbeat = true;
+                          control.port1.postMessage('ping');
+                      }
+                  }, 1000);
+                  port.onmessage = (message) => {
+                      if (stopped) return;
+                      try {
+                          if (message.data?.type !== 'input') throw new Error('Invalid runtime input.');
+                          worker.postMessage(Protocol.decodeValue(message.data.json));
+                      } catch (error) { stop(error.message); }
+                  };
+              } catch (error) { stop('Isolated worker startup failed. Execution was blocked.'); }
+          });
+      }
+  
+      receive(data) {
+          if (this.isTerminated) return;
           try {
-              const run = new Function('scope', `with (scope) {\n${this.script}\n}`);
-              run(this.scope);
-          }
-          catch (error) {
-              this.reportError(error);
-          }
+              if (data?.type === 'ready' && !this.isReady) {
+                  this.isReady = true;
+                  clearTimeout(this.startupTimeout);
+                  const pending = this.pendingMessages;
+                  this.pendingMessages = [];
+                  pending.forEach((json) => this.port.postMessage({ type: 'input', json }));
+                  return;
+              }
+              if (data?.type === 'error' && typeof data.message === 'string') {
+                  this.fail(data.message.slice(0, 1024));
+                  return;
+              }
+              if (data?.type !== 'command') throw new Error('Invalid sandbox response.');
+              SandboxedWorkerHost.consumeBudget(data.json);
+              const command = RuntimeMessageProtocol.decodeCommand(data.json);
+              if (command.command === 'log') {
+                  const budget = SandboxedWorkerHost.globalBudget;
+                  budget.logs = (budget.logs ?? 0) + 1;
+                  if (budget.logs > 64) throw new Error('Simulation log rate limit exceeded.');
+              }
+              this.onmessage?.({ data: command });
+          } catch (error) { this.fail(error.message); }
+      }
+  
+      static consumeBudget(json) {
+          const budget = this.globalBudget;
+          const now = Date.now();
+          if (now - budget.since >= 1000) { budget.since = now; budget.messages = 0; budget.chars = 0; budget.logs = 0; }
+          if (++budget.messages > 2000) throw new Error('Simulation message rate limit exceeded.');
+          if (typeof json !== 'string' || json.length > RuntimeMessageProtocol.maxMessageChars) throw new Error('Invalid component message.');
+          budget.chars += json.length;
+          if (budget.chars > 2 * RuntimeMessageProtocol.maxCharsPerSecond) throw new Error('Simulation message volume limit exceeded.');
       }
   
       postMessage(message) {
           if (this.isTerminated) return;
           try {
-              const handler = this.scope?.onmessage;
-              if (typeof handler !== 'function') return;
-              handler.call(this.scope, { data: message });
-          }
-          catch (error) {
-              this.reportError(error);
-          }
+              const json = RuntimeMessageProtocol.encodeValue(message);
+              SandboxedWorkerHost.consumeBudget(json);
+              if (this.isReady) {
+                  this.port.postMessage({ type: 'input', json });
+                  return;
+              }
+              if (this.pendingMessages.length >= RuntimeMessageProtocol.maxPendingMessages) throw new Error('Component startup input queue limit exceeded.');
+              this.pendingMessages.push(json);
+          } catch (error) { this.fail(error.message); }
+      }
+  
+      fail(message) {
+          if (this.isTerminated) return;
+          this.terminate();
+          this.onerror?.({ message });
       }
   
       terminate() {
+          if (this.isTerminated) return;
           this.isTerminated = true;
-          if (this.scope) {
-              this.scope.onmessage = null;
+          clearTimeout(this.startupTimeout);
+          this.pendingMessages = [];
+          if (this.port) {
+              this.port.onmessage = null;
+              this.port.onmessageerror = null;
+              this.port.close();
           }
-          this.pendingOutboundEvents = [];
-          this.pendingErrorEvents = [];
-      }
-  
-      dispatchOutboundEvent(event) {
-          if (typeof this._onmessage === 'function') {
-              this._onmessage(event);
-              return;
+          this.unconnectedPort?.close();
+          if (this.frame) {
+              this.frame.onload = null;
+              this.frame.remove();
           }
-          this.pendingOutboundEvents.push(event);
-      }
-  
-      flushPendingOutboundEvents() {
-          if (typeof this._onmessage !== 'function' || !this.pendingOutboundEvents.length) return;
-          const pendingEvents = this.pendingOutboundEvents.slice();
-          this.pendingOutboundEvents = [];
-          pendingEvents.forEach((event) => {
-              this._onmessage(event);
-          });
-      }
-  
-      reportError(error) {
-          const event = {
-              error,
-              message: error?.message || String(error),
-          };
-          if (typeof this._onerror === 'function') {
-              this._onerror(event);
-              return;
-          }
-          this.pendingErrorEvents.push(event);
-      }
-  
-      flushPendingErrorEvents() {
-          if (typeof this._onerror !== 'function' || !this.pendingErrorEvents.length) return;
-          const pendingEvents = this.pendingErrorEvents.slice();
-          this.pendingErrorEvents = [];
-          pendingEvents.forEach((event) => {
-              this._onerror(event);
-          });
       }
   }
-  
+  </script>
+  <!-- inlined from ./lib/Code/ComponentWorker.js -->
+  <script>
   class ComponentWorker {
   
       listenerKey = 'component-worker';
@@ -7200,7 +7390,7 @@
           this.component = component;
           this.logger = logger;
           this.runtimeScript = this.buildRuntimeScript(component);
-          this.runtimeMode = 'worker';
+          this.runtimeMode = 'sandboxed-worker';
           this.webWorker = this.createExecutionHost(this.runtimeScript);
           this.webWorker.onmessage = (e) => {
               if (this.isRunning) {
@@ -7208,6 +7398,10 @@
                   return;
               }
               if (this.hasStarted !== true) {
+                  if (this.pendingCommands.length >= RuntimeMessageProtocol.maxPendingMessages) {
+                      this.handleRuntimeError({ message: 'Component startup command queue limit exceeded.' });
+                      return;
+                  }
                   this.pendingCommands.push(e.data);
               }
           };
@@ -7259,39 +7453,17 @@
       }
   
       createExecutionHost(script) {
-          try {
-              const url = this.codeToUrl(script);
-              const worker = new Worker(url);
-              worker.__doublephiObjectUrl = url;
-              this.runtimeMode = 'worker';
-              return worker;
-          }
-          catch (error) {
-              this.runtimeMode = 'inline';
-              this.logRuntimeMessage(
-                  `${this.getWorkerFallbackPrefix()} ${this.getErrorMessage(error)}`,
-              );
-              return new InlineWorkerHost(script);
-          }
-      }
-  
-      getWorkerFallbackPrefix() {
-          const runningFromFileOrigin = globalThis?.location?.protocol === 'file:';
-          if (runningFromFileOrigin) {
-              return 'Worker startup failed; falling back to inline component runtime. If you opened the app directly from disk, serving it over http:// can avoid browser worker restrictions.';
-          }
-          return 'Worker startup failed; falling back to inline component runtime.';
+          return new SandboxedWorkerHost(script);
       }
   
       buildRuntimeScript(component) {
-          const networkGuard = this.buildNetworkGuardScript();
-          const context = this.buildContext(component);
-          const componentCode = component.getCode();
-          return `${networkGuard}\n\n${context}\n\n${componentCode}`;
+          return `${this.buildContext(component)}\n\n${component.getCode()}`;
       }
   
       handleRuntimeError(event) {
-          this.logRuntimeMessage(`Component code error: ${this.getErrorMessage(event)}`, 'error');
+          this.logRuntimeMessage(`Component execution stopped: ${this.getErrorMessage(event)}`, 'error');
+          this.stop();
+          this.component.stopTimers?.();
       }
   
       getErrorMessage(errorLike) {
@@ -7338,134 +7510,6 @@
           const definition = `const ctx = Context.create(properties, channels, channelTargets, { componentName: ${JSON.stringify(component.name)}, triggerNames, timerNames, timerIntervals });`;
           const commandHandler = `onmessage = (e) => { const cmd = new WorkerCommand(e.data.cat, e.data.name, e.data.value); cmd.execute(); }`;
           return `${nameAliasHelperClass}\n\n${commandClass}\n\n${contextClass}\n\n${propertiesMap}\n\n${channelsList}\n\n${channelTargetsMap}\n\n${triggerNamesList}\n\n${timerNamesList}\n\n${timerIntervalsMap}\n\n${definition}\n\n${commandHandler}`;
-      }
-  
-      buildNetworkGuardScript() {
-          const allowedOrigin = globalThis?.location?.origin ?? null;
-          const allowedBaseUrl = globalThis?.location?.href ?? null;
-          return `
-  const __doublephiAllowedOrigin = ${JSON.stringify(allowedOrigin)};
-  const __doublephiAllowedBaseUrl = ${JSON.stringify(allowedBaseUrl)};
-  const __doublephiOriginalFetch = typeof globalThis.fetch === 'function'
-      ? globalThis.fetch.bind(globalThis)
-      : null;
-  const __doublephiOriginalImportScripts = typeof globalThis.importScripts === 'function'
-      ? globalThis.importScripts.bind(globalThis)
-      : null;
-  const __doublephiOriginalXmlHttpRequestOpen = typeof globalThis.XMLHttpRequest?.prototype?.open === 'function'
-      ? globalThis.XMLHttpRequest.prototype.open
-      : null;
-  const __doublephiOriginalWebSocket = typeof globalThis.WebSocket === 'function'
-      ? globalThis.WebSocket
-      : null;
-  const __doublephiOriginalEventSource = typeof globalThis.EventSource === 'function'
-      ? globalThis.EventSource
-      : null;
-  const __doublephiOriginalWorker = typeof globalThis.Worker === 'function'
-      ? globalThis.Worker
-      : null;
-  const __doublephiOriginalSharedWorker = typeof globalThis.SharedWorker === 'function'
-      ? globalThis.SharedWorker
-      : null;
-  
-  function __doublephiResolveUrl(input) {
-      if (input instanceof Request) return new URL(input.url, __doublephiAllowedBaseUrl ?? globalThis?.location?.href ?? undefined);
-      if (input instanceof URL) return input;
-      return new URL(String(input), __doublephiAllowedBaseUrl ?? globalThis?.location?.href ?? undefined);
-  }
-  
-  function __doublephiIsAllowedUrl(url) {
-      if (!Boolean(__doublephiAllowedOrigin) || !url) return false;
-      if (url.origin === __doublephiAllowedOrigin) return true;
-      if (!__doublephiAllowedBaseUrl) return false;
-  
-      const allowedUrl = new URL(__doublephiAllowedBaseUrl);
-      const isWebSocketUrl = url.protocol === 'ws:' || url.protocol === 'wss:';
-      if (!isWebSocketUrl) return false;
-  
-      return (
-          (allowedUrl.protocol === 'http:' && url.protocol === 'ws:')
-          || (allowedUrl.protocol === 'https:' && url.protocol === 'wss:')
-      ) && url.hostname === allowedUrl.hostname && url.port === allowedUrl.port;
-  }
-  
-  function __doublephiCreateBlockedUrlError(apiName, resolvedUrl) {
-      return new Error(
-          apiName + ' blocked for "' + resolvedUrl.href + '". Only same-origin requests to ' + __doublephiAllowedOrigin + ' are allowed.',
-      );
-  }
-  
-  function __doublephiAssertAllowedUrl(input, apiName) {
-      const resolvedUrl = __doublephiResolveUrl(input);
-      if (!__doublephiIsAllowedUrl(resolvedUrl)) {
-          throw __doublephiCreateBlockedUrlError(apiName, resolvedUrl);
-      }
-      return resolvedUrl;
-  }
-  
-  if (__doublephiOriginalFetch) {
-      globalThis.fetch = (input, init) => {
-          try {
-              __doublephiAssertAllowedUrl(input, 'Worker fetch');
-          } catch (error) {
-              return Promise.reject(error);
-          }
-          return __doublephiOriginalFetch(input, init);
-      };
-  }
-  
-  if (__doublephiOriginalImportScripts) {
-      globalThis.importScripts = (...inputs) => {
-          inputs.forEach((input) => {
-              __doublephiAssertAllowedUrl(input, 'Worker importScripts');
-          });
-          return __doublephiOriginalImportScripts(...inputs);
-      };
-  }
-  
-  if (__doublephiOriginalXmlHttpRequestOpen) {
-      globalThis.XMLHttpRequest.prototype.open = function(method, input, ...rest) {
-          __doublephiAssertAllowedUrl(input, 'Worker XMLHttpRequest');
-          return __doublephiOriginalXmlHttpRequestOpen.call(this, method, input, ...rest);
-      };
-  }
-  
-  if (__doublephiOriginalWebSocket) {
-      globalThis.WebSocket = class DoublephiWebSocket extends __doublephiOriginalWebSocket {
-          constructor(input, protocols) {
-              __doublephiAssertAllowedUrl(input, 'Worker WebSocket');
-              super(input, protocols);
-          }
-      };
-  }
-  
-  if (__doublephiOriginalEventSource) {
-      globalThis.EventSource = class DoublephiEventSource extends __doublephiOriginalEventSource {
-          constructor(input, init = undefined) {
-              __doublephiAssertAllowedUrl(input, 'Worker EventSource');
-              super(input, init);
-          }
-      };
-  }
-  
-  if (__doublephiOriginalWorker) {
-      globalThis.Worker = class DoublephiWorker extends __doublephiOriginalWorker {
-          constructor(input, options = undefined) {
-              __doublephiAssertAllowedUrl(input, 'Worker constructor');
-              super(input, options);
-          }
-      };
-  }
-  
-  if (__doublephiOriginalSharedWorker) {
-      globalThis.SharedWorker = class DoublephiSharedWorker extends __doublephiOriginalSharedWorker {
-          constructor(input, options = undefined) {
-              __doublephiAssertAllowedUrl(input, 'Worker SharedWorker');
-              super(input, options);
-          }
-      };
-  }
-  `.trim();
       }
   
       buildPropertiesMap(component) {
@@ -7517,6 +7561,7 @@
   
   
       start() {
+          if (this.webWorker?.isTerminated) return;
           this.isRunning = true;
           if (this.hasStarted === true || !this.pendingCommands.length) {
               this.hasStarted = true;
@@ -7533,23 +7578,14 @@
       stop() {
           this.isRunning = false;
           this.component.detachListener(this.listenerKey);
-          if (this.webWorker?.__doublephiObjectUrl) {
-              URL.revokeObjectURL(this.webWorker.__doublephiObjectUrl);
-          }
-          this.webWorker.terminate();
+          this.pendingCommands = [];
+          this.webWorker?.terminate();
       }
   
       pause() {
           this.isRunning = false;
       }
   
-      sendMessage() {
-      }
-  
-      codeToUrl(fn) {
-          const blob = new Blob([`${fn}`], { type: "text/javascript" });
-          return URL.createObjectURL(blob);
-      }
   }
   </script>
   <!-- inlined from ./lib/Code/OutboundCommand.js -->
@@ -7563,6 +7599,7 @@
       }
   
       execute() {
+          RuntimeMessageProtocol.encodeCommand(this.command);
           if (this.command.command === 'send') {
               const channel = this.component.getChannel(this.command.channel);
               if (channel) {
@@ -7709,12 +7746,24 @@
               this.componentWorkers.forEach((w) => w.start());
               return;
           }
+          const components = this.workspace.getComponents();
+          if (components.length > 128) {
+              this.logger?.log?.('Simulation blocked: the isolated runtime supports at most 128 components.', { kind: 'error' });
+              return false;
+          }
           this.captureStartState();
           this.setRunState(ExecutionEnvironment.runStateRunning);
-          this.componentWorkers = this.workspace.getComponents().map((c) => {
-              return new ComponentWorker(c, this.componentCodeLogger);
-          });
-          this.componentWorkers.forEach((w) => w.start());
+          try {
+              for (const component of components) {
+                  this.componentWorkers.push(new ComponentWorker(component, this.componentCodeLogger));
+              }
+              this.componentWorkers.forEach((w) => w.start());
+              return true;
+          } catch (error) {
+              this.stop();
+              this.logger?.log?.(`Simulation blocked: isolated execution could not start. ${error.message}`, { kind: 'error' });
+              return false;
+          }
       }
   
       stop() {
@@ -10516,6 +10565,85 @@
       }
   }
   </script>
+  <!-- inlined from ./lib/ModelImportGuard.js -->
+  <script>
+  class ModelImportGuard {
+      static maxFileBytes = 8 * 1024 * 1024;
+  
+      static parse(text) {
+          if (typeof text !== 'string' || text.length > this.maxFileBytes) throw new Error('Model file exceeds the 8 MiB import limit.');
+          const value = JSON.parse(text);
+          this.validate(value);
+          return value;
+      }
+  
+      static async readFile(file) {
+          if (file.size > this.maxFileBytes) throw new Error('Model file exceeds the 8 MiB import limit.');
+          return file.text();
+      }
+  
+      static validate(value) {
+          const pending = [{ value, depth: 0 }];
+          const ancestors = new Set();
+          let nodes = 0;
+          let chars = 0;
+          while (pending.length) {
+              const entry = pending.pop();
+              if (entry.exit) { ancestors.delete(entry.value); continue; }
+              const item = entry.value;
+              if (++nodes > 100000 || entry.depth > 64) throw new Error('Model data is too complex.');
+              if (typeof item === 'string') {
+                  chars += item.length;
+                  if (item.length > 1024 * 1024 || chars > this.maxFileBytes) throw new Error('Model data is too large.');
+                  continue;
+              }
+              if (item === undefined || item === null || typeof item === 'boolean' || (typeof item === 'number' && Number.isFinite(item))) continue;
+              if (!item || typeof item !== 'object' || ancestors.has(item)) throw new Error('Invalid or cyclic model data.');
+              if (!Array.isArray(item) && ![null, Object.prototype].includes(Object.getPrototypeOf(item))) throw new Error('Model data must contain plain JSON objects.');
+              if (Array.isArray(item) && item.length > 10000) throw new Error('Model array is too large.');
+              const keys = Object.keys(item);
+              if (keys.length > 10000) throw new Error('Model object is too large.');
+              ancestors.add(item);
+              pending.push({ value: item, exit: true });
+              for (const key of keys) {
+                  chars += key.length;
+                  if (chars > this.maxFileBytes) throw new Error('Model data is too large.');
+                  if (['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'toJSON', 'toLocaleString'].includes(key)) throw new Error('Unsafe key in model data.');
+                  const property = Object.getOwnPropertyDescriptor(item, key);
+                  if (!property || !('value' in property)) throw new Error('Model data accessors are not allowed.');
+                  pending.push({ value: property.value, depth: entry.depth + 1 });
+              }
+          }
+      }
+  
+      static validateWorkspace(snapshot) {
+          if (snapshot.items.length > 2048 || snapshot.connections.length > 8192) throw new Error('Model contains too many items or connections.');
+          const items = new Map();
+          for (const item of snapshot.items) {
+              if (!item || !Number.isSafeInteger(item.id) || item.id < 0 || items.has(item.id)) throw new Error('Invalid or duplicate model item id.');
+              if (typeof item.name !== 'string' || item.name.length > 1024) throw new Error('Invalid model item name.');
+              items.set(item.id, item);
+              for (const key of ['connectables', 'triggers', 'timers']) {
+                  const entries = item[key] ?? [];
+                  if (!Array.isArray(entries) || entries.length > 256) throw new Error('Too many component inputs or outputs.');
+                  for (const entry of entries) {
+                      if (!entry || typeof entry.name !== 'string' || entry.name.length > 1024) throw new Error('Invalid component input or output name.');
+                  }
+              }
+          }
+          for (const item of items.values()) {
+              const seen = new Set([item.id]);
+              let parentId = item.parentId;
+              while (parentId != null) {
+                  const parent = items.get(parentId);
+                  if (!parent || parent.type !== 'container' || seen.has(parentId) || seen.size > 64) throw new Error('Invalid or cyclic model hierarchy.');
+                  seen.add(parentId);
+                  parentId = parent.parentId;
+              }
+          }
+      }
+  }
+  </script>
   <!-- inlined from ./lib/WorkspacePersistence.js -->
   <script>
   class WorkspacePersistence {
@@ -10800,12 +10928,12 @@
     }
   
     async loadFromText(jsonText) {
-      const snapshot = JSON.parse(jsonText);
+      const snapshot = ModelImportGuard.parse(jsonText);
       this.loadSnapshot(snapshot);
     }
   
     async loadFromFile(file) {
-      const fileText = await file.text();
+      const fileText = await ModelImportGuard.readFile(file);
       await this.loadFromText(fileText);
     }
   
@@ -10820,6 +10948,7 @@
     }
   
     migrateSnapshot(snapshot) {
+      ModelImportGuard.validate(snapshot);
       if (!snapshot || !Array.isArray(snapshot.items) || !Array.isArray(snapshot.connections)) {
         throw new Error('Invalid save data.');
       }
@@ -10840,6 +10969,7 @@
       migratedSnapshot.controlPanels = this.normalizeControlPanelSnapshots(migratedSnapshot.controlPanels);
       migratedSnapshot.windowLayout = this.normalizeWindowLayoutSnapshot(migratedSnapshot.windowLayout);
   
+      ModelImportGuard.validateWorkspace(migratedSnapshot);
       return migratedSnapshot;
     }
   
@@ -13170,12 +13300,12 @@
     }
   
     async loadFromText(jsonText) {
-      const snapshot = JSON.parse(jsonText);
+      const snapshot = ModelImportGuard.parse(jsonText);
       this.loadSnapshot(snapshot);
     }
   
     async loadFromFile(file) {
-      const fileText = await file.text();
+      const fileText = await ModelImportGuard.readFile(file);
       await this.loadFromText(fileText);
     }
   
@@ -13250,12 +13380,12 @@
     }
   
     async loadLibraryFromText(jsonText, options = {}) {
-      const snapshot = JSON.parse(jsonText);
+      const snapshot = ModelImportGuard.parse(jsonText);
       return this.loadLibrarySnapshot(snapshot, options);
     }
   
     async loadLibraryFromFile(file, options = {}) {
-      const fileText = await file.text();
+      const fileText = await ModelImportGuard.readFile(file);
       return this.loadLibraryFromText(fileText, {
         ...options,
         fileName: file?.name ?? options.fileName,
@@ -13484,6 +13614,7 @@
     }
   
     migrateSnapshot(snapshot) {
+      ModelImportGuard.validate(snapshot);
       if (this.isLegacyWorkspaceSnapshot(snapshot)) {
         return this.wrapLegacyWorkspaceSnapshot(snapshot);
       }
@@ -22175,7 +22306,7 @@
               if (!file) return;
               try {
                   await this.persistence.loadFromFile(file);
-                  this.loadTextarea.value = await file.text();
+                  this.loadTextarea.value = await ModelImportGuard.readFile(file);
                   this.persistencePanel.open();
                   this.setStatus(this.t('status.loadedFile', {
                       name: file.name,
@@ -30429,6 +30560,8 @@
   <!-- inlined from ./lib/Controls/LoggerPanel.js -->
   <script>
   class LoggerPanel {
+      static maxEntries = 500;
+      static maxMessageChars = 4096;
   
       static translations = Object.freeze({
           en: Object.freeze({
@@ -30648,11 +30781,14 @@
       appendLogEntry(message, metadata = null) {
           const normalizedMetadata = metadata ?? {};
           this.entries.push({
-              message: String(message),
+              message: String(message).slice(0, LoggerPanel.maxMessageChars),
               metadata: normalizedMetadata,
               kind: normalizedMetadata.kind === 'error' ? 'error' : 'log',
               timestamp: new Date(),
           });
+          if (this.entries.length > LoggerPanel.maxEntries) {
+              this.entries.splice(0, this.entries.length - LoggerPanel.maxEntries);
+          }
           this.renderEntries();
       }
   
@@ -37464,7 +37600,7 @@
       }
     }
   </style>
-  <meta name="jigbox-build-version" content="3">
+  <meta name="jigbox-build-version" content="5">
 </head>
 
 <body>
